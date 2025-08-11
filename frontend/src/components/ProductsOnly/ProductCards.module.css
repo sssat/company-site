@@ -1,0 +1,85 @@
+/* 컨테이너 */
+.wrap {
+  max-width: 1100px;
+  margin: 40px auto 120px;
+  padding: 0 20px;
+  display: grid;
+  gap: 56px;
+}
+
+/* 1개 행(이미지 + 카피) */
+.row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+
+  /* 페이드업 */
+  opacity: 0;
+  transform: translateY(48px);
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+.show { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+/* 데스크톱에서 2열 레이아웃 */
+@media (min-width: 900px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+    align-items: center;  /* 세로(수직) 가운데 정렬 */
+    gap: 40px;
+  }
+  .reverse { direction: rtl; }       /* 순서만 바꾸기 */
+  .reverse > * { direction: ltr; }   /* 내용은 그대로 LTR */
+}
+
+/* 썸네일 */
+.thumb img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+/* 텍스트 영역: 가로(수평) 가운데 정렬 */
+.copy {
+  line-height: 1.65;
+  width: 100%;
+  justify-self: stretch;
+
+  display: flex;              /* 수평/수직 중앙 정렬을 위해 flex 사용 */
+  flex-direction: column;
+  align-items: center;        /* 로고/문장 가로 중앙 */
+  text-align: center;         /* 텍스트 가로 중앙 */
+}
+
+/* 로고 이미지 */
+.logo {
+  width: 280px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 0 10px;
+  object-fit: contain;
+}
+
+/* 설명(리치 텍스트 컨테이너) */
+.desc {
+  font-family: "Noto Sans KR", sans-serif;
+  font-weight: 500;
+  font-size: 22px;
+  color: #374151;
+  margin: 0 0 6px;
+  line-height: 1.75;
+}
+.desc p { margin: 0 0 6px; }
+.desc strong { font-weight: 800; }
+
+/* 슬로건(영문) – 각 카드에서 개별 색상 지정 */
+.slogan {
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  margin-top: 25px;
+}

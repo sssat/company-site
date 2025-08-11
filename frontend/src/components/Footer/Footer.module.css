@@ -1,0 +1,121 @@
+/* ───────── 공통 푸터 영역 ───────── */
+.footer {
+  color: #ffffff;       /* 글자색: 흰색 */
+  font-size: 20px;      /* 기본 글자 크기 */
+  margin-top: 100px;    /* 상단과 간격 */
+}
+
+/* ───────── 내부 고정 폭 컨테이너 ───────── */
+.inner {
+  width: 90%;           /* 전체 폭의 90% */
+  max-width: 1500px;    /* 최대 폭 제한 */
+  margin: 0 auto;       /* 가로 중앙 정렬 */
+}
+
+/* ───────── 파트너 영역 (색상: A) ───────── */
+.partnersBlock {
+  background: #0b0b0b;  /* 어두운 배경색 */
+  padding: 48px 0 24px; /* 위/아래 여백 */
+}
+
+/* 파트너 영역 제목 */
+.partnersTitle {
+  font-size: 34px;      /* 글자 크기 */
+  font-weight: 700;     /* 굵게 */
+  text-align: center;   /* 가운데 정렬 */
+  margin: 0 0 24px;     /* 아래쪽 간격 */
+}
+
+/* 로고 스트립 전체 너비 컨테이너 */
+.stripWrap {
+  /* full-bleed 효과: 부모 폭을 벗어나 화면 끝까지 확장 */
+  margin-left: calc(50% - 35vw);
+  margin-right: calc(50% - 35vw);
+}
+
+/* 파트너 로고 이미지 스타일 */
+.partnerStrip {
+  display: block;       /* 블록 요소 */
+  width: 70vw;          /* 화면의 70% 너비 */
+  height: auto;         /* 높이 자동 비율 유지 */
+  object-fit: contain;  /* 이미지 비율 유지, 잘림 방지 */
+  /* 필요 시 최대 높이 제한 가능:
+     max-height: 140px; */
+}
+
+/* ───────── 하단 회사/연락처 영역 (색상: B) ───────── */
+.bottomBlock {
+  background: #181818;  /* 약간 밝은 어두운 배경 */
+  padding: 48px 0 60px; /* 위/아래 여백 */
+}
+
+/* 회사 정보와 연락처 레이아웃 */
+.bottom {
+  display: flex;                /* 가로 배치 */
+  justify-content: space-between;/* 좌우 끝으로 배치 */
+  align-items: flex-start;       /* 위쪽 정렬 */
+  gap: 32px;                     /* 아이템 간격 */
+  flex-wrap: wrap;               /* 줄바꿈 허용 */
+}
+
+/* 회사/연락처 공통 스타일 */
+.company,
+.contact {
+  line-height: 1.8;    /* 줄 간격 */
+  white-space: pre-line; /* 줄바꿈 문자 유지 */
+}
+
+/* 연락처 제목 스타일 */
+.contact h3 {
+  font-size: 18px;     /* 글자 크기 */
+  margin: 0 0 8px;     /* 아래쪽 여백 */
+}
+
+/* ─────────────────────────────────────────
+   반응형: 데스크톱 축소 구간(<=1024px)
+   - 간격/타이틀 크기 살짝 축소
+────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .partnersTitle { font-size: 28px; }
+  .bottom { gap: 24px; }
+}
+
+/* ─────────────────────────────────────────
+   반응형: 태블릿(<=768px)
+   - 전반 폰트/패딩 보정으로 밀림 방지
+────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .footer { font-size: 18px; }           /* 푸터 기본 글자 크기 소폭 축소 */
+  .partnersBlock { padding: 40px 0 20px; }/* 파트너 영역 패딩 감소 */
+  .bottomBlock { padding: 40px 0 48px; }  /* 하단 영역 패딩 감소 */
+  .company, .contact { line-height: 1.7; }/* 줄간격 살짝 타이트하게 */
+}
+
+/* ─────────────────────────────────────────
+   반응형: 모바일(<=600px)
+   - 컬럼 1열 전환, 여백 축소
+   - 로고 스트립을 실제 풀블리드(100vw)로
+────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .bottom { flex-direction: column; gap: 16px; } /* 2열 → 1열, 간격 축소 */
+  .contact h3 { margin-top: 16px; }              /* 아래쪽 섹션과 간격 확보 */
+  .partnersTitle { font-size: 24px; margin-bottom: 16px; }
+  .inner { width: 92%; }                          /* 좌우 여백 약간 축소 */
+
+  /* 로고 스트립: 화면 양끝 딱 맞게(풀블리드) */
+  .stripWrap {
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  .partnerStrip { width: 100vw; }                 /* 70vw → 100vw로 확장 */
+}
+
+/* ─────────────────────────────────────────
+   반응형: 소형 모바일(<=420px)
+   - 더 작은 화면용 폰트/패딩 보정
+────────────────────────────────────────── */
+@media (max-width: 420px) {
+  .footer { font-size: 16px; margin-top: 72px; }
+  .partnersBlock { padding: 32px 0 16px; }
+  .bottomBlock { padding: 32px 0 40px; }
+}

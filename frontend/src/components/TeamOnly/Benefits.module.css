@@ -1,0 +1,132 @@
+/* 구글 폰트(스크립트 느낌) 로드 */
+@import url('https://fonts.googleapis.com/css2?family=Parisienne&family=Great+Vibes&family=Dancing+Script:wght@400;600&display=swap');
+
+/* 섹션 전체 */
+.section {
+  padding: 0;
+  margin-top: 172px; /* People 카드 영역과 간격 */
+  margin-bottom: -50px;
+}
+
+/* 타이틀: People 섹션과 같은 왼쪽 라인 */
+.head {
+  max-width: 1100px;
+  margin: 20px auto 40px;  /* 타이틀 - 내용 간격 */
+  padding: 0 20px;
+
+  opacity: 0;
+  transform: translateY(56px);
+  transition: opacity 0.9s ease-out, transform 0.9s ease-out;
+}
+
+.h1 {
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 900;
+  font-size: 48px;
+  margin: 0;
+}
+
+/* 리스트 컨테이너 */
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto 160px;
+  padding: 0 20px;
+}
+
+/* 리스트 */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 항목 */
+.item {
+  display: grid;
+  grid-template-columns: 260px 1fr; /* 좌측 폭 넉넉하게 */
+  gap: 24px;
+  padding: 26px 0;
+  border-bottom: 2px solid #f1f5f9;
+
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.75s ease-out, transform 0.75s ease-out;
+}
+.item.show { opacity: 1; transform: translateY(0); }
+
+/* 좌측: 아이콘 + (영문/한글) */
+.iconCol {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #111827;
+}
+
+/* 테두리 제거 */
+.iconWrap {
+  width: 76px;
+  height: 76px;
+  border: none;              /* ← 테두리 제거 */
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: transparent;   /* 필요하면 투명 배경 */
+}
+
+.iconWrap img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  display: block;            /* 미세한 여백 방지 */
+  border: none;              /* 혹시 모를 기본 테두리 제거 */
+}
+
+
+/* 레이블 스택(영문 + 한글) */
+.labelCol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.engWord {
+  /* 스크립트 느낌 + 오렌지 컬러 */
+  font-family: "Parisienne", "Great Vibes", "Dancing Script", "Brush Script MT", "Segoe Script", cursive;
+  font-weight: 400;
+  font-size: 34px;       /* 필요 시 30~38px 사이 조절 */
+  line-height: 1;
+  letter-spacing: 0.4px;
+  color: #e98a05;        /* 은은한 오렌지 (#f59e0b 계열과 유사) */
+}
+.koLabel {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #111827;
+}
+
+/* 우측: 불릿 */
+.detailCol { display: flex; align-items: center; }
+.bullets { margin: 0; padding: 0; list-style: none; }
+.bullets li {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #374151;
+}
+
+/* 공통 페이드업 */
+.show { opacity: 1; transform: translateY(0); }
+.hidden { opacity: 0; transform: translateY(56px); }
+
+/* 반응형 */
+@media (max-width: 1024px) {
+  .engWord { font-size: 30px; }
+}
+@media (max-width: 768px) {
+  .h1 { font-size: 36px; }
+  .item { grid-template-columns: 1fr; }
+  .iconCol { margin-bottom: 6px; }
+}

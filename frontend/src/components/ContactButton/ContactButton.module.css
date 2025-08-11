@@ -1,0 +1,37 @@
+.ctaWrap {
+  margin-top: 206px;
+  display: flex;
+  justify-content: center;
+
+  /* 페이드-업 초기 상태 */
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+  will-change: opacity, transform;
+}
+
+/* 보이기 상태 */
+.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cta {
+  display: inline-block;
+  padding: 16px 28px;
+  border-radius: 12px;
+  background: #3ba1ff;
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  text-decoration: none;
+  box-shadow: 0 8px 28px rgba(17, 24, 39, 0.08);
+}
+
+@media (max-width: 900px) {
+  .cta {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+}

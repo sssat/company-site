@@ -1,0 +1,121 @@
+/* 페이지 기본 */
+.page {
+  min-height: 140vh;
+  background: #ffffff;
+  color: #111827;
+}
+
+/* 인트로: 좌(제목) / 중간(문구) / 우(여백) */
+.intro {
+  max-width: 1100px;
+  margin: 100px auto 40px;
+  padding: 0 20px;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;  /* ← 가운데 컬럼에 문구 배치 */
+  gap: 24px;
+
+  align-items: start;
+  opacity: 0;
+  transform: translateY(56px);
+  transition: opacity 0.9s ease-out, transform 0.9s ease-out;
+}
+
+/* 제목: 왼쪽 컬럼 고정 */
+.h1 {
+  grid-column: 1 / 2;
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 900;
+  font-size: 48px;
+  margin: 0;
+}
+
+/* 문구: 가운데 컬럼 + 가운데 정렬 */
+.kicker {
+  grid-column: 2 / 3;        /* ← 중앙 컬럼 */
+  justify-self: center;      /* 컬럼 안에서 수평 중앙 */
+  text-align: center;        /* 텍스트 중앙 정렬 */
+  margin: 100px 0 0 0;        /* 제목보다 살짝 아래 */
+  font-family: "Noto Sans KR", sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.5;
+}
+
+/* 페이드업 공통 */
+.show { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+/* 팀 카드 그리드 */
+.grid {
+  max-width: 1100px;
+  margin: 40px auto 120px;
+  padding: 0 20px;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 32px;
+}
+
+/* 개별 카드 */
+.card {
+  border: 2px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.75s ease-out, transform 0.75s ease-out, box-shadow 0.2s;
+}
+.card:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.08); }
+
+/* 썸네일 */
+.thumb {
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.thumb img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+
+/* 설명 + 배지 */
+.blurb {
+  font-family: "Noto Sans KR", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+  margin: 6px 0 10px;
+}
+
+.badge {
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  color: #111827;
+  border-radius: 8px;
+  padding: 8px 12px;
+  width: 100%;
+  text-align: center;
+}
+
+/* 카드가 보일 때 */
+.card.show { opacity: 1; transform: translateY(0); }
+
+/* 반응형 */
+@media (max-width: 1024px) {
+  .kicker { margin-top: 10px; }
+}
+@media (max-width: 768px) {
+  .intro {
+    grid-template-columns: 1fr; /* 모바일은 한 줄 */
+    text-align: center;
+    gap: 12px;
+  }
+  .h1 { font-size: 36px; grid-column: auto; }
+  .kicker { font-size: 18px; margin-top: 6px; grid-column: auto; }
+}

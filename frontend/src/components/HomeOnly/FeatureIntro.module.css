@@ -1,0 +1,94 @@
+/* overflow: hidden 을 없애거나 */
+.container {
+  padding: 180px 20px;
+  text-align: center;
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;  /* ← 여기에 이동 */
+   /* overflow: hidden;            주석 처리 */
+}
+
+/* 최초 상태: 아래쪽 + 흐림 */
+.hidden {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+/* 또는 .show 상태에서 overflow 를 풀어준다 */
+.show {
+  opacity: 1;
+  transform: translateY(0);
+  overflow: visible;   /* 애니메이션 끝나면 잘림 해제 */
+}
+
+/* 헤딩(STRATEGY 등) */
+.headings {
+  display: flex;
+  gap: 48px;
+  justify-content: center;
+  font-family: "Anton", "Noto Sans KR", sans-serif; /* ← 추가 */
+  font-size: 56px;          /* 굵은 글꼴일수록 한 단계만 키워도 큼 */
+  font-weight: 400;         /* Anton은 400 하나뿐 */
+  margin-bottom: 64px;
+  text-transform: uppercase;/* 혹시 소문자 섞여도 전부 대문자 표시 */
+  letter-spacing: 1px;      /* 살짝 트래킹 주면 더 시원해 보임 */
+}
+
+/* 카피(한글) */
+.subtitle {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  font-size: 32px;
+  font-weight: 900;          /* 굵기 맞춰줌 */
+  line-height: 1.35;
+  margin-bottom: 24px;
+}
+
+.description {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #c3bfbf;
+  margin-bottom: 72px;
+}
+
+.stats {
+  display: flex;
+  justify-content: center;
+  gap: 80px;
+  flex-wrap: wrap;
+}
+
+.statItem {
+  text-align: center;
+}
+
+/* 통계 숫자 (h3) */
+.statItem h3 {
+  font-family: "Poppins", "Noto Sans KR", sans-serif; /* ← 새 글꼴 */
+  font-size: 48px;        /* 숫자만 조금 더 키워 주면 시원함 */
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.1;
+}
+
+/* 통계 설명 (p) */
+.statItem p {
+  font-family: "Noto Sans KR", "Poppins", sans-serif;
+  font-size: 14px;
+  color: #777;
+  margin: 6px 0 0;
+  letter-spacing: 0.2px;  /* 살짝 벌려 가독성 ↑ */
+}
+
+/* 숫자 폭 고정 + 등폭 설정 */
+.numberFixed {
+  display: inline-block;
+  min-width: 3ch;          /* '100' 까지 들어갈 공간 확보 */
+  text-align: right;
+  font-variant-numeric: tabular-nums; /* 등폭 숫자 */
+}
+
+/* 모바일 */
+@media (max-width: 600px) {
+  .headings { flex-direction: column; gap: 16px; font-size: 22px; }
+  .stats   { gap: 40px; }
+}

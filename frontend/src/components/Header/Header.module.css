@@ -1,0 +1,146 @@
+/* =========================================
+   헤더(상단 고정) + 얇은 그림자
+========================================= */
+.header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 50;
+  /* 그림자 살짝 완화 */
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.12),
+    0 8px 16px -12px rgba(0, 0, 0, 1);
+}
+
+/* =========================================
+   가운데 정렬 컨테이너(헤더 내부 레이아웃)
+========================================= */
+.inner {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 20px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* =========================================
+   브랜드(로고) 영역
+========================================= */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo {
+  width: 220px;
+  height: 90px;
+  object-fit: contain;
+}
+
+/* =========================================
+   네비게이션 메뉴(Pill 버튼들)
+   - 긴 메뉴 대비: 가로 스크롤 허용
+========================================= */
+.nav {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;        /* 로고와 사용자 영역 사이 띄움 */
+  overflow-x: auto;         /* 길어질 때 가로 스크롤 */
+  -webkit-overflow-scrolling: touch;
+}
+.nav::-webkit-scrollbar { display: none; } /* (선택) 스크롤바 숨김 */
+
+.pill {
+  padding: 10px 18px;
+  border-radius: 20px;
+  background: #f2f4f7;
+  color: #111827;
+  text-decoration: none;
+  font-size: 14px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px -10px rgba(0, 0, 0, 0.4);
+}
+/* 현재 선택된 메뉴 상태 */
+.active {
+  background: #3ba1ff;
+  color: #fff;
+  box-shadow: 0 8px 18px -8px rgba(59, 161, 255, 0.8);
+}
+
+/* =========================================
+   우측 사용자 정보 영역
+========================================= */
+.userArea {
+  display: flex;
+  align-items: center;
+  gap: 0px;
+  color: #111827;
+}
+/* 관리자 뱃지(아이콘/텍스트) */
+.adminBadge {
+  font-size: 16px;
+  line-height: 1;
+}
+.adminText {
+  font-weight: 700;
+  font-size: 14px;
+}
+/* 사용자 이름 */
+.userName {
+  font-size: 10px;
+  font-weight: 700;
+  color: #111827;
+  margin-left: 2px;
+}
+/* 사용자 정보 정렬(세로 쌓기, 우측 정렬) */
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+/* 관리자 행(뱃지 + 텍스트) */
+.adminRow {
+  display: flex;
+  align-items: center;
+}
+/* 로그아웃 버튼 */
+.logoutBtn {
+  margin-left: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  color: #6b7280;
+}
+.logoutBtn:hover {
+  color: #374151;
+  text-decoration: underline;
+}
+
+/* =========================================
+   반응형: 태블릿 이하(<=768px)
+   - 여백/폰트 살짝 축소
+========================================= */
+@media (max-width: 768px) {
+  .inner { gap: 12px; }
+  .nav { gap: 8px; }
+  .pill { padding: 8px 14px; font-size: 13px; }
+}
+
+/* =========================================
+   반응형: 아주 작은 화면(<=480px)
+   - 로고 축소, 네비 줄바꿈 허용, 가독성 보강
+========================================= */
+@media (max-width: 480px) {
+  .logo { width: 160px; height: 64px; }   /* 로고 축소 */
+  .nav { flex-wrap: wrap; row-gap: 8px; }  /* 칩 줄바꿈 허용 */
+  .pill { padding: 6px 12px; font-size: 12px; }
+  .userName, .logoutBtn { font-size: 12px; } /* 가독성 개선 */
+  .inner { padding: 12px 8px; gap: 8px; }
+}
