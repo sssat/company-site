@@ -12,12 +12,12 @@ export type NewsItem = {
   body: string[];      // 상세 본문 단락
 };
 
-import n1 from "../../assets/media/news1.png";
-import n2 from "../../assets/media/news2.png";
-import n3 from "../../assets/media/news3.png";
-import n4 from "../../assets/media/news4.png";
-import n5 from "../../assets/media/news5.png";
-import n6 from "../../assets/media/news6.png";
+import n1 from "../../assets/news/news1.png";
+import n2 from "../../assets/news/news2.png";
+import n3 from "../../assets/news/news3.png";
+import n4 from "../../assets/news/news4.png";
+import n5 from "../../assets/news/news5.png";
+import n6 from "../../assets/news/news6.png";
 
 export const NEWS: NewsItem[] = [
   {
