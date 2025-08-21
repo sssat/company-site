@@ -1,0 +1,117 @@
+/* 섹션 배치 */
+.section {
+  scroll-margin-top: 196px;   /* 문의하기 버튼 누르고 스크롤 될때 헤더에 가려지지 않도록 하기 위함 */
+  padding: 0;
+  margin: 80px 0 0;
+  opacity: 0;
+  transform: translateY(48px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+}
+.show { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+/* 가운데 정렬 + 전용 폼 폭 지정 */
+.wrap {
+  --form-width: 680px;       /* 여기 숫자만 바꾸면 카드/제목 폭이 같이 변경됨 */
+  max-width: 1100px;
+  margin: 0 auto 120px;
+  padding: 0 20px;
+
+  display: flex;
+  justify-content: center;
+}
+
+/* 제목과 카드를 같은 폭으로 묶는 컨테이너 */
+.stack {
+  width: min(100%, var(--form-width));
+}
+
+/* 제목: 카드 왼쪽 상단 기준, 간격 넉넉히 */
+.title {
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 800;
+  font-size: 38px;
+  margin: 0 0 32px 0;        /* 제목-폼 간격 (원하면 40~48로) */
+}
+
+/* 카드 */
+.card {
+  width: 100%;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 6px 16px rgba(0,0,0,.06);
+  padding: 24px;
+}
+.cardTitle {
+  font-weight: 800;
+  font-size: 24px;
+  color: #374151;
+  margin: 4px 0 18px;
+  margin-bottom: 30px;  /* 타이틀 - 성명 칸 간격 */
+}
+
+/* 폼 */
+.form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+}
+.input, .textarea {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+  background: white;
+  transition: box-shadow .15s ease, border-color .15s ease;
+  width: 100%;
+}
+.input:focus, .textarea:focus {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 4px rgba(156,163,175,.25);
+}
+.textarea { resize: vertical; }
+
+/* 에러 */
+.invalid { border-color: #ef4444 !important; }
+.error {
+  margin: -6px 0 6px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+/* 버튼 */
+.button {
+  margin-top: 8px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #64676c;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .06s ease, filter .2s ease;
+}
+.button:hover { filter: brightness(0.95); }
+.button:active { transform: translateY(1px); }
+.button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* 성공 메시지 */
+.success {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #166534;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .title { font-size: 26px; }
+  .wrap  { --form-width: 100%; }
+}

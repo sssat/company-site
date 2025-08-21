@@ -1,0 +1,149 @@
+/* 페이지 여백(하단은 Footer와 간격을 크게 두지 않음) */
+.section { padding: 0; margin: 36px 0 24px; }
+
+/* 컨텐트 래퍼 + 페이드업 */
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 20px;
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity .8s ease-out, transform .8s ease-out;
+}
+.show { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+/* 상세 상단 굵은 라인 */
+.topRule {
+  height: 3px;
+  background: #0f172a;
+  width: 100%;
+  border-radius: 2px;
+  margin: 12px 0 24px;
+}
+
+/* 상단 행: 좌측 제목 / 우측 등록일 */
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* 제목 */
+.title {
+  flex: 1 1 auto;
+  margin: 0;
+  color: #0f172a;
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+/* 등록일 */
+.regDate {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #6b7280;
+  padding-top: 2px;
+}
+
+/* 얇은 구분선 (제목 아래) */
+.hr {
+  border: 0;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 18px 0 12px;
+}
+
+/* ✅ 이미지: 제목 얇은선(.hr) 아래에 위치 */
+.hero {
+  /* 원하는 값으로 덮어쓸 수 있는 변수들 */
+  --hero-w: 60%;
+  --hero-max-w: 100%;
+  --hero-ratio: 16 / 9;     /* auto, 1/1, 4/3 등 */
+  --hero-fit: cover;        /* cover | contain */
+  --hero-max-h: none;       /* 예: 360px */
+
+  width: var(--hero-w);
+  max-width: var(--hero-max-w);
+  margin: 0 0 18px;
+  margin-inline: auto;      /* 가로 중앙 정렬 */
+  background: #f3f4f6;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--hero-ratio);
+  object-fit: var(--hero-fit);
+  max-height: var(--hero-max-h);
+}
+
+/* 본문 문단 */
+.article p {
+  margin: 0 0 16px;
+  line-height: 1.85;
+  color: #111827;
+  font-size: 15px;
+}
+
+/* 얇은 구분선 (본문 아래) */
+.hrBottom {
+  border: 0;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 20px 0 12px;
+}
+
+/* 하단 목록 버튼 */
+.actions { display: flex; justify-content: center; }
+.listBtn {
+  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: auto;
+  block-size: 48px;
+  padding: 0 44px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* 링크/호버 시에도 색상 변화 없도록 고정 */
+.listBtn:hover,
+.listBtn:focus,
+.listBtn:active,
+.listBtn:visited {
+  color: #fff;
+  text-decoration: none;
+  filter: none;
+}
+
+/* 데이터 없음/에러 */
+.fallback {
+  max-width: 880px;
+  margin: 40px auto;
+  padding: 0 20px;
+  text-align: center;
+}
+.backBtn {
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  color: #0f172a;
+}
