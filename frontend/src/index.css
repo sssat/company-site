@@ -70,7 +70,7 @@ body {
 
 /* ========== 링크 기본 스타일 ========== */
 a {
-  font-weight: 500;
+  
   color: var(--color-link);
   text-decoration: none;   /* 밑줄 제거(디자인 정책에 맞게 조정) */
 }

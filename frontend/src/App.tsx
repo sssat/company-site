@@ -49,12 +49,13 @@ function PageLoading() {
 // <> ... </>: React Fragment. 여러 개의 요소를 묶어줄 때 쓰는 "보이지 않는 부모 태그"이다.
 export default function App() {
   return (
-    <AppShell> 
+    <AppShell>
       <Header />   {/* 이 위치에 있으므로 어떤 페이지든 헤더 컴포넌트가 상단에 항상 표시됨 */}
 
       <ErrorBoundary fallback={<div style={{ padding: 24 }}>문제가 발생했습니다.</div>}>
         <Suspense fallback={<PageLoading />}>
           <main style={{ flex: 1 }}>
+            {/* 라우트별 화면은 모두 Outlet으로 렌더 ( /login, /signup 포함 ) */}
             <Outlet />
           </main>
         </Suspense>

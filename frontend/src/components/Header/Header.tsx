@@ -4,82 +4,76 @@
 // JSX: UI 구조를 표현하는 문법 (HTML처럼 생김)
 // HTML: .tsx엔 실제론 없음! JSX를 브라우저가 HTML로 바꾸는 것뿐
 
-import { NavLink } from 'react-router-dom';
-import styles from './Header.module.css';
-import logo from '../../assets/company_logo/company_logo.svg'; 
+import { NavLink } from "react-router-dom";
+import styles from "./Header.module.css";
+import logo from "../../assets/company_logo/company_logo.svg";
 
 export default function Header() {
-  const userName = 'OOO님'; // 실제 로그인 데이터로 대체
+  // 실제 앱에선 글로벌 상태(예: Recoil/Context)나 쿠키/토큰 검사로 대체
+  const isLoggedIn = false;         // ← 데모: 로그인 여부
+  const userName = "OOO님";         // ← 데모: 로그인 시 표시될 이름
 
-  // return () => JSX 문법을 반환. 이게 화면에 그려짐(렌더링 됨)
   return (
-
     <header className={styles.header}>
       <div className={styles.inner}>
+        {/* 브랜드 로고 */}
         <div className={styles.brand}>
-          {/* 로고 이미지 */}
-          {/* src={logo}: 이미지 경로를 지정. 여기서 logo는 import logo from '../assets/logo.svg';로 불러온 이미지 파일 경로
-              alt="MARKET STAGE": 이미지가 로딩되지 않을때의 대체 텍스트 */}
           <img src={logo} alt="MARKET STAGE" className={styles.logo} />
         </div>
 
         {/* 네비게이션 */}
         <nav className={styles.nav}>
           {[
-            { to: '/', label: 'Home' },
-            { to: '/products', label: 'Products' },
-            { to: '/media', label: 'Media' },
-            { to: '/team', label: 'Team' },
-            { to: '/contact', label: 'Contact' },
-          ].map(item => (
+            { to: "/", label: "Home" },
+            { to: "/products", label: "Products" },
+            { to: "/media", label: "Media" },
+            { to: "/team", label: "Team" },
+            { to: "/contact", label: "Contact" },
+          ].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-
-              className={function(data) {
-
-                // data에서 isActive값을 꺼내서 별도 변수에 저장함
+              className={(data) => {
                 const isActive = data.isActive;
                 let classNames = styles.pill;
-
-                if (isActive) {
-                  classNames += ' ' + styles.active;
-                }
-
+                if (isActive) classNames += " " + styles.active;
                 return classNames;
               }}
             >
               {item.label}
             </NavLink>
           ))}
-
-        {/*최종적으로 
-          <nav className={styles.nav}>
-            [
-              <NavLink ...>Home</NavLink>,
-              <NavLink ...>Products</NavLink>,
-              <NavLink ...>Media</NavLink>,
-              <NavLink ...>Team</NavLink>,
-              <NavLink ...>Contact</NavLink>
-            ]
-          </nav>
-          이런 형태이다.
-        */}  
         </nav>
 
-        {/* 우측: Admin / 사용자명 / 로그아웃 */}
-        <div className={styles.userArea}>
-          <div className={styles.userInfo}>
-            <div className={styles.adminRow}>
-              <span className={styles.adminBadge}>🛡️</span>
-              <span className={styles.adminText}>Admin</span>
+        {/* 우측 영역: 로그인 여부에 따라 표시 분기 */}
+        {isLoggedIn ? (
+          // 로그인 상태: Admin 뱃지 + 사용자명 + 로그아웃
+          <div className={styles.userArea}>
+            <div className={styles.userInfo}>
+              <div className={styles.adminRow}>
+                <span className={styles.adminBadge}>🛡️</span>
+                <span className={styles.adminText}>Admin</span>
+              </div>
+              <span className={styles.userName}>{userName}</span>
             </div>
-            <span className={styles.userName}>{userName}</span>
+            <button
+              className={styles.logoutBtn}
+              onClick={() => alert("로그아웃")}
+            >
+              로그아웃
+            </button>
           </div>
-          <button className={styles.logoutBtn} onClick={() => alert('로그아웃')}>
-            로그아웃
-          </button>
-        </div>
+        ) : (
+          // 비로그인 상태: 로그인 · 회원가입
+          <div className={styles.authArea}>
+            <NavLink to="/login" className={styles.authLink}>
+              로그인
+            </NavLink>
+            <NavLink to="/signup" className={styles.authLink}>
+              회원가입
+            </NavLink>
+          </div>
+        )}
       </div>
     </header>
   );

@@ -27,7 +27,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "./App";
 
 // 전체 앱에 적용할 전역 스타일(css) 파일
-import './index.css';
+import "./index.css";
 
 // Home, Products, ... 컴포넌트 임포트
 import Home from "./pages/Home";
@@ -35,7 +35,15 @@ import Media from "./pages/Media";
 import Products from "./pages/Products";
 import Team from "./pages/Team";
 import Contact from "./pages/Contact";
-import NewsDetail from "./components/MediaOnly/NewsDetail";
+import NewsDetailPage from "./pages/NewsDetailPage"; // 변경 포인트
+
+// 추가: 인증 페이지 라우트
+import LoginPage from "./pages/AuthPage/LoginPage";
+import SignUpPage from "./pages/AuthPage/SignUpPage";
+
+import FindIdPage from "./pages/AuthPage/FindIdPage"; 
+import FindPasswordPage from "./pages/AuthPage/FindPasswordPage";
+import SignUpSuccessPage from "./pages/AuthPage/SignUpSuccessPage";
 
 // export를 추가해 경고 제거
 export function NotFound() {
@@ -49,10 +57,19 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
       { path: "media", element: <Media /> },
-      { path: "media/:slug", element: <NewsDetail /> }, // 상대 경로(슬래시 없음)
+      { path: "media/:slug", element: <NewsDetailPage /> }, // 여기로 교체
       { path: "products", element: <Products /> },
       { path: "team", element: <Team /> },
       { path: "contact", element: <Contact /> },
+
+      // 여기 추가된 두 라우트
+      { path: "login", element: <LoginPage /> },
+      { path: "signup", element: <SignUpPage /> },
+
+      { path: "find-id", element: <FindIdPage /> },
+      { path: "find-password", element: <FindPasswordPage /> },
+      { path: "signup/success", element: <SignUpSuccessPage /> },
+
       { path: "*", element: <NotFound /> },
     ],
   },

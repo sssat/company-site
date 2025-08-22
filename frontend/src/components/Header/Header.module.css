@@ -6,7 +6,6 @@
   top: 0;
   background: #fff;
   z-index: 50;
-  /* 그림자 살짝 완화 */
   box-shadow:
     0 1px 0 rgba(0, 0, 0, 0.12),
     0 8px 16px -12px rgba(0, 0, 0, 1);
@@ -41,16 +40,15 @@
 
 /* =========================================
    네비게이션 메뉴(Pill 버튼들)
-   - 긴 메뉴 대비: 가로 스크롤 허용
 ========================================= */
 .nav {
   display: flex;
   gap: 16px;
-  margin-left: auto;        /* 로고와 사용자 영역 사이 띄움 */
-  overflow-x: auto;         /* 길어질 때 가로 스크롤 */
+  margin-left: auto;
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.nav::-webkit-scrollbar { display: none; } /* (선택) 스크롤바 숨김 */
+.nav::-webkit-scrollbar { display: none; }
 
 .pill {
   padding: 10px 18px;
@@ -65,7 +63,6 @@
   transform: translateY(-1px);
   box-shadow: 0 6px 14px -10px rgba(0, 0, 0, 0.4);
 }
-/* 현재 선택된 메뉴 상태 */
 .active {
   background: #3ba1ff;
   color: #fff;
@@ -73,7 +70,7 @@
 }
 
 /* =========================================
-   우측 사용자 정보 영역
+   우측 사용자 정보(로그인 상태)
 ========================================= */
 .userArea {
   display: flex;
@@ -81,7 +78,6 @@
   gap: 0px;
   color: #111827;
 }
-/* 관리자 뱃지(아이콘/텍스트) */
 .adminBadge {
   font-size: 16px;
   line-height: 1;
@@ -90,25 +86,21 @@
   font-weight: 700;
   font-size: 14px;
 }
-/* 사용자 이름 */
 .userName {
   font-size: 10px;
   font-weight: 700;
   color: #111827;
   margin-left: 2px;
 }
-/* 사용자 정보 정렬(세로 쌓기, 우측 정렬) */
 .userInfo {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
 }
-/* 관리자 행(뱃지 + 텍스트) */
 .adminRow {
   display: flex;
   align-items: center;
 }
-/* 로그아웃 버튼 */
 .logoutBtn {
   margin-left: 8px;
   border: none;
@@ -124,8 +116,25 @@
 }
 
 /* =========================================
+   우측 인증 링크(비로그인 상태)
+========================================= */
+.authArea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 8px;
+}
+.authLink {
+  font-size: 14px;
+  font-weight: 400; 
+  color: #111827;
+  text-decoration: none;
+}
+.authLink:hover { text-decoration: underline; }
+.divider { color: #9ca3af; }
+
+/* =========================================
    반응형: 태블릿 이하(<=768px)
-   - 여백/폰트 살짝 축소
 ========================================= */
 @media (max-width: 768px) {
   .inner { gap: 12px; }
@@ -135,12 +144,11 @@
 
 /* =========================================
    반응형: 아주 작은 화면(<=480px)
-   - 로고 축소, 네비 줄바꿈 허용, 가독성 보강
 ========================================= */
 @media (max-width: 480px) {
-  .logo { width: 160px; height: 64px; }   /* 로고 축소 */
-  .nav { flex-wrap: wrap; row-gap: 8px; }  /* 칩 줄바꿈 허용 */
+  .logo { width: 160px; height: 64px; }
+  .nav { flex-wrap: wrap; row-gap: 8px; }
   .pill { padding: 6px 12px; font-size: 12px; }
-  .userName, .logoutBtn { font-size: 12px; } /* 가독성 개선 */
+  .userName, .logoutBtn, .authLink { font-size: 12px; }
   .inner { padding: 12px 8px; gap: 8px; }
 }
