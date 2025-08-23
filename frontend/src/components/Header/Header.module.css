@@ -32,10 +32,20 @@
   align-items: center;
   gap: 12px;
 }
+.brandLink {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.brandLink:focus-visible {
+  outline: 2px solid #3ba1ff;
+  outline-offset: 2px;
+}
 .logo {
   width: 220px;
   height: 90px;
   object-fit: contain;
+  cursor: pointer; /* 클릭 가능한 느낌 */
 }
 
 /* =========================================

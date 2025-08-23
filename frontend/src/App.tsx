@@ -55,8 +55,7 @@ export default function App() {
       <ErrorBoundary fallback={<div style={{ padding: 24 }}>문제가 발생했습니다.</div>}>
         <Suspense fallback={<PageLoading />}>
           <main style={{ flex: 1 }}>
-            {/* 라우트별 화면은 모두 Outlet으로 렌더 ( /login, /signup 포함 ) */}
-            <Outlet />
+            <Outlet />   {/* 라우트별 화면은 모두 Outlet으로 렌더 ( /login, /signup 포함 ) */}
           </main>
         </Suspense>
       </ErrorBoundary>

@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 // 컴포넌트는 일반 import
-import SignUpCard from "../../components/Auth/SignUpCard";
+import SignUpCard from "../../../components/Auth/SignUpCard";
 // 타입은 type-only import (TS1484 해결 포인트)
-import type { SignUpForm } from "../../components/Auth/SignUpCard";
+import type { SignUpForm } from "../../../components/Auth/SignUpCard";
 
 export default function SignUpPage() {
   const nav = useNavigate();

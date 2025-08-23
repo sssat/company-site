@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import SignUpSuccessCard from "../../components/Auth/SignUpSuccessCard";
+import SignUpSuccessCard from "../../../components/Auth/SignUpSuccessCard";
 
 type LocState = { state?: { name?: string } };
 

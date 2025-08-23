@@ -16,9 +16,16 @@ export default function Header() {
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        {/* 브랜드 로고 */}
+        {/* 브랜드 로고 (클릭 시 Home으로 이동) */}
         <div className={styles.brand}>
-          <img src={logo} alt="MARKET STAGE" className={styles.logo} />
+          <NavLink
+            to="/"
+            className={styles.brandLink}
+            aria-label="홈으로 이동"
+            title="홈으로 이동"
+          >
+            <img src={logo} alt="MARKET STAGE" className={styles.logo} />
+          </NavLink>
         </div>
 
         {/* 네비게이션 */}

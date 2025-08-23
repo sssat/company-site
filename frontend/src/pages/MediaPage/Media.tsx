@@ -1,6 +1,6 @@
-import HeroSlider from "../components/HeroSlider/HeroSlider";
-import NewsList from "../components/MediaOnly/NewsList";
-import ContactButton from "../components/ContactButton/ContactButton";
+import HeroSlider from "../../components/HeroSlider/HeroSlider";
+import NewsList from "../../components/MediaOnly/NewsList";
+import ContactButton from "../../components/ContactButton/ContactButton";
 
 export default function Media() {
   return (
