@@ -101,13 +101,9 @@ WSGI_APPLICATION = "config.wsgi.application"  # WSGI 진입점(입구): config/w
 
 # ───────────────── 데이터베이스 ─────────────────
 DATABASES = {
-    "default": {   # Django 기본 DB 설정
-        "ENGINE": "django.db.backends.mysql",  # 사용할 DB 엔진 → MySQL
-        "NAME": "company_site_db",             # 데이터베이스 이름
-        "USER": "db_user",                     # DB 접속 계정 (MySQL에 로그인할 때 쓰는 계정 이름)
-        "PASSWORD": "비밀번호",                 # 계정 비밀번호 (그 계정의 비밀번호)
-        "HOST": "localhost",                   # DB 서버 주소 (여기선 내 PC)
-        "PORT": "3306",                        # MySQL 기본 포트 (3306)
+    "default": {
+        "ENGINE": env("DB_ENGINE", default="django.db.backends.sqlite3"),
+        "NAME": env("DB_NAME", default=BASE_DIR / "db.sqlite3"),
     }
 }
 
