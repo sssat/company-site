@@ -1,6 +1,6 @@
 import { useState } from "react";
 import styles from "./LoginCard.module.css";
-import logo from "../../assets/company_logo/company_logo.svg";
+import logo from "../../../assets/company_logo/company_logo.svg";
 
 type LoginCardProps = {
   /** 외부에서 로그인 처리 로직을 주입하고 싶을 때 사용 (선택) */

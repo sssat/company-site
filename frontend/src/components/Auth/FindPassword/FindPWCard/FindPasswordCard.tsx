@@ -1,7 +1,7 @@
-// 비밀번호 찾기(재설정 요청) 카드 컴포넌트
-// - 라벨 없이 플레이스홀더만 표시
-// - 제출 시 onSubmit으로 서버 연동 가능
-// - 카드 폭은 CSS 변수로 제어(기본 420px)
+// FindPasswordCard.tsx
+// 비밀번호 찾기(재설정 링크 요청) - 아이디 한 칸만 사용
+// - 제출 시 onSubmit(payload: { username })로 서버 연동
+// - 카드 폭은 CSS 변수(--card-width)로 제어
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -11,7 +11,7 @@ type Props = {
   /** 카드 폭(px 또는 CSS 크기). 기본 420 */
   cardWidth?: number | string;
   /** 제출 시 서버 호출(없으면 데모 alert) */
-  onSubmit?: (payload: { username: string; name: string; email: string }) => Promise<void> | void;
+  onSubmit?: (payload: { username: string }) => Promise<void> | void;
   /** 링크 경로 커스터마이즈 */
   toSignup?: string;
   toLogin?: string;
@@ -24,10 +24,8 @@ export default function FindPasswordCard({
   toLogin = "/login",
 }: Props) {
   const [username, setUsername] = useState("");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ username?: string; name?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{ username?: string }>({});
 
   // CSS 변수 주입
   type Vars = React.CSSProperties & { ["--card-width"]?: string };
@@ -42,9 +40,6 @@ export default function FindPasswordCard({
   const validate = () => {
     const e: typeof errors = {};
     if (!username.trim()) e.username = "아이디를 입력해주세요.";
-    if (!name.trim()) e.name = "이름을 입력해주세요.";
-    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!ok) e.email = "이메일 형식이 올바르지 않습니다.";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -55,11 +50,13 @@ export default function FindPasswordCard({
     setLoading(true);
     try {
       if (onSubmit) {
-        await onSubmit({ username: username.trim(), name: name.trim(), email: email.trim() });
+        await onSubmit({ username: username.trim() });
       } else {
         // 데모 동작(실서비스에선 서버 응답 메시지로 대체)
         await new Promise((r) => setTimeout(r, 600));
-        alert("요청이 접수되었습니다. 등록된 계정이 있다면 재설정 링크를 메일로 보냈습니다.");
+        alert(
+          "요청이 접수되었습니다. 입력하신 정보와 일치하는 계정이 있다면 재설정 링크를 이메일로 보냈습니다."
+        );
       }
     } finally {
       setLoading(false);
@@ -80,31 +77,11 @@ export default function FindPasswordCard({
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
+                inputMode="text"
               />
-              {errors.username && <p className={styles.error}>{errors.username}</p>}
-            </label>
-
-            <label className={styles.field}>
-              <input
-                className={styles.input}
-                placeholder="이름"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-              />
-              {errors.name && <p className={styles.error}>{errors.name}</p>}
-            </label>
-
-            <label className={styles.field}>
-              <input
-                className={styles.input}
-                placeholder="이메일"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-              />
-              {errors.email && <p className={styles.error}>{errors.email}</p>}
+              {errors.username && (
+                <p className={styles.error}>{errors.username}</p>
+              )}
             </label>
 
             <button className={styles.submit} type="submit" disabled={loading}>

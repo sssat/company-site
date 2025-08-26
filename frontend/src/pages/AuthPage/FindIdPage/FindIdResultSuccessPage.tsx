@@ -3,7 +3,7 @@
 // 전달 경로: (1) location.state.userId  (2) 쿼리스트링 ?id=  (없으면 데모 문자열)
 import { useEffect } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import FindIdResultSuccess from "../../../components/Auth/FindIdResultSuccess";
+import FindIdResultSuccess from "../../../components/Auth/FindID/FindIDResultSuccess/FindIdResultSuccess";
 
 export default function FindIdResultSuccessPage() {
   const location = useLocation();

@@ -3,7 +3,7 @@
 // message는 location.state.message 또는 기본 문구 사용.
 import { useEffect } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import FindPasswordResultFail from "../../../components/Auth/FindPasswordResultFail";
+import FindPasswordResultFail from "../../../components/Auth/FindPassword/FindPWResultFail/FindPasswordResultFail";
 
 export default function FindPasswordResultFailPage() {
   const location = useLocation();

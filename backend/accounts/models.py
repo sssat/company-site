@@ -4,9 +4,6 @@
 from django.db import models         # 장고에서 DB와 관련된 모든 기능(ORM 필드, 모델 클래스 등)이 들어있는 모듈
 from django.utils import timezone    # 장고가 제공하는 시간/날짜 유틸리티 모듈
 
-from django.db import models
-from django.utils import timezone
-
 # ─────────────────────────────────────────────────────────
 # 회원 User
 # ─────────────────────────────────────────────────────────

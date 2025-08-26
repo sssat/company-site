@@ -4,7 +4,7 @@
 
 import { useEffect } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import FindPasswordResultSuccess from "../../../components/Auth/FindPasswordResultSuccess";
+import FindPasswordResultSuccess from "../../../components/Auth/FindPassword/FindPWResultSuccess/FindPasswordResultSuccess";
 
 export default function FindPasswordResultSuccessPage() {
   const location = useLocation();

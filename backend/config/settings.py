@@ -135,7 +135,7 @@ STATIC_URL = "static/"   # 브라우저가 정적 파일에 접근할 때 사용
 
 # 배포용 폴더 경로 -> 따라서 배포 하지 않을거라면 이 코드는 필요없다.
 # python manage.py collectstatic 명령어를 실행하면, 각 앱(app_name/static/…)에 흩어져 있는 모든 정적 파일을 하나로 모아서(collect) → BASE_DIR/staticfiles/ 안에 저장
-STATIC_ROOT = BASE_DIR / "staticfiles"  
+STATIC_ROOT = BASE_DIR / "staticfiles"      
 
 # ───────────────── DRF / JWT ─────────────────
 # REST_FRAMEWORK => Django REST Framework(DRF)의 전역 기본 설정을 정의

@@ -1,7 +1,7 @@
 // src/pages/AuthPage/FindIdPage.tsx
 import { useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import FindIdCard from "../../../components/Auth/FindIdCard";
+import FindIdCard from "../../../components/Auth/FindID/FindIDCard/FindIdCard";
 
 // const API_FIND_ID = "/api/auth/find-id"; // 백엔드 붙일 때 사용
 
@@ -21,7 +21,7 @@ export default function FindIdPage() {
         /fail|없음|nomatch/i.test(email ?? "");
 
       if (shouldFail) {
-        navigate("/find-id/result/fail", {
+        navigate("/find-id/fail", {
           state: { message: "조회결과가 없습니다." },
         });
         return;
@@ -48,7 +48,7 @@ export default function FindIdPage() {
       const userId =
         (name?.trim() || (email.includes("@") ? email.split("@")[0] : "")).trim() ||
         "Esggs123";
-      navigate("/find-id/result", { state: { userId } });
+      navigate("/find-id/success", { state: { userId } });
     },
     [navigate]
   );

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import ChangePasswordComplete from "../../../components/Auth/ChangePasswordComplete";
+import ChangePasswordComplete from "../../../components/Auth/ChangePassword/ChangePWComplete/ChangePasswordComplete";
 
 export default function ChangePasswordCompletePage() {
   useEffect(() => {

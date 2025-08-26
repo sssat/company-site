@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import styles from "./SignUpSuccessCard.module.css";
-import logo from "../../assets/company_logo/company_logo.svg";
+import logo from "../../../../assets/company_logo/company_logo.svg";
 
 type Props = {
   name?: string;                 // 예: "홍길동"

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import styles from "./ChangePasswordComplete.module.css";
-import lockPng from "../../assets/lock/lock.png"; // PNG 임포트
+import lockPng from "../../../../assets/lock/lock.png"; // PNG 임포트
 
 type Props = {
   cardWidth?: number | string;

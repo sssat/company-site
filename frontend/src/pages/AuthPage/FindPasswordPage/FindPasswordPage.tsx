@@ -1,7 +1,7 @@
 // src/pages/AuthPage/FindPasswordPage.tsx
 import { useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import FindPasswordCard from "../../../components/Auth/FindPasswordCard";
+import FindPasswordCard from "../../../components/Auth/FindPassword/FindPWCard/FindPasswordCard";
 
 // const API_PASSWORD_FIND = "/api/auth/password-find"; // 실제 엔드포인트로 교체
 
@@ -30,7 +30,7 @@ export default function FindPasswordPage() {
         /fail|없음|nomatch/i.test(email ?? "");
 
       if (shouldFail) {
-        navigate("/find-password/result/fail", {
+        navigate("/find-password/fail", {
           state: { message: "조회결과가 없습니다." },
         });
         return;
@@ -57,7 +57,7 @@ export default function FindPasswordPage() {
       // ----- 데모 성공 동작: 임시 비밀번호 생성해 성공 페이지로 이동 -----
       const demoPassword =
         (username?.slice(0, 3) || "Esg") + "@saas123"; // 스샷과 유사한 형태
-      navigate("/find-password/result", { state: { password: demoPassword } });
+      navigate("/find-password/success", { state: { password: demoPassword } });
     },
     [navigate]
   );

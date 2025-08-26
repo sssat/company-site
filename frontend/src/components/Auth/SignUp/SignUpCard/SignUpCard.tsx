@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import styles from "./SignUpCard.module.css";
-import logo from "../../assets/company_logo/company_logo.svg";
+import logo from "../../../../assets/company_logo/company_logo.svg";
 
 /** 폼 데이터 타입 */
 export type SignUpForm = {

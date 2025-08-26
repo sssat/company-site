@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import ChangePasswordCard from "../../../components/Auth/ChangePasswordCard";
+import ChangePasswordCard from "../../../components/Auth/ChangePassword/ChangePWCard/ChangePasswordCard";
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
