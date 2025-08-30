@@ -71,7 +71,22 @@ export default function Header() {
 
             {menuOpen && (
               <div className={styles.userMenu} role="menu">
-                <NavLink to="/change-password" className={styles.menuItem} onClick={() => setMenuOpen(false)}>
+                {/* SUPER_ADMIN 전용 메뉴 */}
+                {role === "SUPER_ADMIN" && (
+                  <NavLink
+                    to="/admin/users"
+                    className={styles.menuItem}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    회원 관리
+                  </NavLink>
+                )}
+
+                <NavLink
+                  to="/change-password"
+                  className={styles.menuItem}
+                  onClick={() => setMenuOpen(false)}
+                >
                   비밀번호 변경
                 </NavLink>
                 <button className={styles.menuItem} onClick={logout}>

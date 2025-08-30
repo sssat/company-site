@@ -1,0 +1,127 @@
+/* 기존 내용 그대로 + 제목 버튼 스타일만 추가 */
+
+/* 섹션 페이드업 */
+.section {
+  padding: 0;
+  margin: 80px 0 0;
+  opacity: 0;
+  transform: translateY(48px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+}
+.show { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto 120px;
+  padding: 0 20px;
+}
+
+/* 제목 */
+.title {
+  font-family: "Poppins","Noto Sans KR",sans-serif;
+  font-weight: 900;
+  font-size: 32px;
+  margin: 0 0 30px;
+}
+
+/* 상단 공지(관리자 안내) */
+.noticeRow { margin: 6px 0 16px; }
+
+/* 표 */
+.tableWrap { width: 100%; overflow-x: auto; }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.table thead tr { background: #f8fafc; }
+.table th, .table td {
+  border-bottom: 1px solid #eef2f7;
+  padding: 12px 10px;
+  text-align: left;
+  font-size: 14px;
+}
+.table tbody tr:hover { background: #f9fafb; }
+
+.thNo, .tdNo { width: 70px; text-align: center; }
+.thAuthor, .tdAuthor { width: 120px; text-align: center; }
+.thDate, .tdDate { width: 140px; text-align: center; }
+.thStatus, .tdStatus { width: 120px; text-align: center; }
+
+.tdTitle { font-weight: 700; color: #111827; }
+
+/* 제목 버튼 (상세 이동) */
+.titleBtn {
+  all: unset;
+  cursor: pointer;
+  color: #111827;
+}
+.titleBtn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.titleBtn:hover { text-decoration: underline; }
+
+.statusPending {
+  color: #ef4444;
+  font-weight: 800;
+}
+.statusDone {
+  color: #16a34a;
+  font-weight: 800;
+}
+
+.empty {
+  text-align: center;
+  padding: 28px 0;
+  color: #6b7280;
+}
+
+/* 검색 */
+.searchRow {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 8px;
+}
+.search {
+  width: 260px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  outline: none;
+  background: #fff;
+}
+.search:focus {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(156,163,175,.25);
+}
+
+/* 페이지네이션 */
+.pager {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+.pagerBtn, .pagerNum {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  font-weight: 800;
+}
+.pagerBtn:disabled { opacity: .5; cursor: not-allowed; }
+.current {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+/* 반응형 */
+@media (max-width: 640px) {
+  .title { font-size: 26px; }
+}

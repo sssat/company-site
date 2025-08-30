@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import styles from "../MediaPage/NewsCreatePage.module.css";
-import { useAuth } from "../../hooks/useAuth";
-import { NEWS } from "../../components/MediaOnly/newsData";
+import styles from "./NewsCreatePage.module.css";
+import { useAuth } from "../../../hooks/useAuth";
+import { NEWS } from "../../../components/MediaOnly/newsData";
 
 // 등록/목록에서 쓰던 타입을 기반으로 편집에 필요한 필드만 보강
 type BaseItem = (typeof NEWS)[number];

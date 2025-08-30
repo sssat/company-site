@@ -1,7 +1,7 @@
 // src/pages/AdminPage/UserManagementPage/UserManagementPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import styles from "./UserManagementPage.module.css";
-import type { Role } from "../../contexts/AuthContext";
+import type { Role } from "../../../contexts/AuthContext";
 
 type User = {
   id: number;

@@ -1,6 +1,6 @@
 /* 섹션 배치 */
 .section {
-  scroll-margin-top: 196px;   /* 문의하기 버튼 누르고 스크롤 될때 헤더에 가려지지 않도록 하기 위함 */
+  scroll-margin-top: 196px; /* 문의하기 버튼 누르고 스크롤 될때 헤더에 가려지지 않도록 하기 위함 */
   padding: 0;
   margin: 80px 0 0;
   opacity: 0;
@@ -16,7 +16,6 @@
   max-width: 1100px;
   margin: 0 auto 120px;
   padding: 0 20px;
-
   display: flex;
   justify-content: center;
 }
@@ -25,6 +24,28 @@
 .stack {
   width: min(100%, var(--form-width));
 }
+
+/* ✅ 관리자 버튼을 카드 바로 위 오른쪽에 배치 */
+.adminBar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 12px;  /* 제목과 카드 사이에서 적당한 간격 */
+}
+
+.adminLink {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  font-weight: 800;
+  font-size: 12px;
+  text-decoration: none;
+}
+.adminLink:hover { background: #f3f4f6; }
 
 /* 제목: 카드 왼쪽 상단 기준, 간격 넉넉히 */
 .title {

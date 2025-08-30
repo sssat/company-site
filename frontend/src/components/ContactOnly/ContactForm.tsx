@@ -1,5 +1,7 @@
+// src/components/ContactOnly/ContactForm.tsx
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ChangeEvent } from "react";
+import { Link } from "react-router-dom";
 import styles from "./ContactForm.module.css";
 
 type FormState = {
@@ -9,7 +11,17 @@ type FormState = {
   message: string;
 };
 
-export default function ContactForm() {
+type Props = {
+  /** 관리자/슈퍼관리자에게만 보이는 '문의 게시판' 버튼 표시 여부 */
+  showAdminLink?: boolean;
+  /** '문의 게시판' 버튼 이동 경로 */
+  adminLinkTo?: string;
+};
+
+export default function ContactForm({
+  showAdminLink = false,
+  adminLinkTo = "/contact/board",
+}: Props) {
   const [values, setValues] = useState<FormState>({
     name: "",
     email: "",
@@ -24,16 +36,22 @@ export default function ContactForm() {
   const sectionRef = useRef<HTMLElement>(null);
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const io = new IntersectionObserver(([e], o) => {
-      if (e.isIntersecting) { setShow(true); o.disconnect(); }
-    }, { threshold: 0.08 });
+    const io = new IntersectionObserver(
+      ([e], o) => {
+        if (e.isIntersecting) {
+          setShow(true);
+          o.disconnect();
+        }
+      },
+      { threshold: 0.08 }
+    );
     if (sectionRef.current) io.observe(sectionRef.current);
     return () => io.disconnect();
   }, []);
 
   const onChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setValues(v => ({ ...v, [e.target.name]: e.target.value }));
-    setErrors(err => ({ ...err, [e.target.name]: undefined }));
+    setValues((v) => ({ ...v, [e.target.name]: e.target.value }));
+    setErrors((err) => ({ ...err, [e.target.name]: undefined }));
   };
 
   const validate = (v: FormState) => {
@@ -56,7 +74,7 @@ export default function ContactForm() {
       setSubmitting(true);
       // 실제 연동 위치
       // await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
-      await new Promise(res => setTimeout(res, 600)); // demo
+      await new Promise((res) => setTimeout(res, 600)); // demo
       setDone(true);
       setValues({ name: "", email: "", subject: "", message: "" });
     } finally {
@@ -66,7 +84,7 @@ export default function ContactForm() {
 
   return (
     <section
-      id="contact"    
+      id="contact"
       ref={sectionRef}
       className={`${styles.section} ${show ? styles.show : styles.hidden}`}
     >
@@ -75,43 +93,72 @@ export default function ContactForm() {
         <div className={styles.stack}>
           <h1 className={styles.title}>문의하기</h1>
 
+          {/* 관리자/슈퍼관리자 전용 버튼 (제목 아래, 카드 위/오른쪽) */}
+          {showAdminLink && (
+            <div className={styles.adminBar}>
+              <Link to={adminLinkTo} className={styles.adminLink}>
+                문의 게시판
+              </Link>
+            </div>
+          )}
+
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>우리 영업팀에 문의하세요</h2>
 
             <form className={styles.form} onSubmit={onSubmit} noValidate>
-              <label className={styles.label} htmlFor="name">성명</label>
+              <label className={styles.label} htmlFor="name">
+                성명
+              </label>
               <input
-                id="name" name="name"
+                id="name"
+                name="name"
                 className={`${styles.input} ${errors.name ? styles.invalid : ""}`}
                 placeholder="이름을 입력해주세요"
-                value={values.name} onChange={onChange} autoComplete="name"
+                value={values.name}
+                onChange={onChange}
+                autoComplete="name"
               />
               {errors.name && <p className={styles.error}>{errors.name}</p>}
 
-              <label className={styles.label} htmlFor="email">이메일</label>
+              <label className={styles.label} htmlFor="email">
+                이메일
+              </label>
               <input
-                id="email" name="email" type="email"
+                id="email"
+                name="email"
+                type="email"
                 className={`${styles.input} ${errors.email ? styles.invalid : ""}`}
                 placeholder="이메일을 입력해주세요"
-                value={values.email} onChange={onChange} autoComplete="email"
+                value={values.email}
+                onChange={onChange}
+                autoComplete="email"
               />
               {errors.email && <p className={styles.error}>{errors.email}</p>}
 
-              <label className={styles.label} htmlFor="subject">제목</label>
+              <label className={styles.label} htmlFor="subject">
+                제목
+              </label>
               <input
-                id="subject" name="subject"
+                id="subject"
+                name="subject"
                 className={`${styles.input} ${errors.subject ? styles.invalid : ""}`}
                 placeholder="제목을 입력해주세요"
-                value={values.subject} onChange={onChange}
+                value={values.subject}
+                onChange={onChange}
               />
               {errors.subject && <p className={styles.error}>{errors.subject}</p>}
 
-              <label className={styles.label} htmlFor="message">메시지</label>
+              <label className={styles.label} htmlFor="message">
+                메시지
+              </label>
               <textarea
-                id="message" name="message" rows={6}
+                id="message"
+                name="message"
+                rows={6}
                 className={`${styles.textarea} ${errors.message ? styles.invalid : ""}`}
                 placeholder="메시지를 입력해주세요"
-                value={values.message} onChange={onChange}
+                value={values.message}
+                onChange={onChange}
               />
               {errors.message && <p className={styles.error}>{errors.message}</p>}
 
@@ -119,7 +166,9 @@ export default function ContactForm() {
                 {submitting ? "전송 중..." : "제출하기"}
               </button>
 
-              {done && <p className={styles.success}>접수되었습니다. 빠르게 연락드리겠습니다!</p>}
+              {done && (
+                <p className={styles.success}>접수되었습니다. 빠르게 연락드리겠습니다!</p>
+              )}
             </form>
           </div>
         </div>

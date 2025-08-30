@@ -1,7 +1,8 @@
-// src/routes/RequireRole.tsx
+// RequireRole = 라우트 가드 
+// 
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import type { Role } from "../contexts/AuthContext"; // 경로는 프로젝트에 맞게
+import type { Role } from "../contexts/AuthContext"; 
 import type { ReactElement } from "react";
 
 type RequireRoleProps = {

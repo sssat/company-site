@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
-import NewsDetail from "../../components/MediaOnly/NewsDetail";
+import NewsDetail from "../../../components/MediaOnly/NewsDetail";
 
 export default function NewsDetailPage() {
   const { slug } = useParams<{ slug?: string }>();

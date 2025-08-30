@@ -29,16 +29,17 @@ import App from "./App";
 // 전체 앱에 적용할 전역 스타일(css) 파일
 import "./index.css";
 
-// ----------------------------- 페이지 임포트 ------------------------------------
-// 1. 기본 헤더 페이지 임포트
-import Home from "./pages/Home";
-import Products from "./pages/Products";
-import Media from "./pages/MediaPage/Media.tsx";
-import NewsDetailPage from "./pages/MediaPage/NewsDetailPage.tsx"; 
-import Team from "./pages/Team";
-import Contact from "./pages/Contact";
+// ---------------------------------------- 페이지(pages) 임포트  -----------------------------------------------
+// => URL로 직접 렌더되는 화면들
+// 1. User 공개 페이지
+import Home from "./pages/PublicPage/Home";
+import Products from "./pages/PublicPage/Products";
+import Media from "./pages/PublicPage/MediaPage/Media.tsx";
+import NewsDetailPage from "./pages/PublicPage/MediaPage/NewsDetailPage.tsx"; 
+import Team from "./pages/PublicPage/Team";
+import Contact from "./pages/PublicPage/Contact";
 
-// 2. 인증 페이지
+// 2. 인증/계정 페이지
 // (1) 로그인/회원가입
 import LoginPage from "./pages/AuthPage/LoginPage/LoginPage";
 import SignUpPage from "./pages/AuthPage/SignUpPage/SignUpPage";
@@ -57,16 +58,29 @@ import FindPasswordResultFailPage from "./pages/AuthPage/FindPasswordPage/FindPa
 // (4) 비밀번호 변경
 import ChangePasswordPage from "./pages/AuthPage/ChangePasswordPage/ChangePasswordPage";
 import ChangePasswordCompletePage from "./pages/AuthPage/ChangePasswordPage/ChangePasswordCompletePage";
-// -----------------------------------------------------------------------------------------
 
-import AuthProvider from "./contexts/AuthProvider";
+// 3. 관리자(Admin) 전용 페이지
+// (1) super admin 전용
+import UserManagementPage from "./pages/AdminPage/SuperAdminOnlyPage/UserManagementPage";
 
-// 매칭되는 라우트가 없을 때(=404 상황) 보여줄 간단한 화면
+// (2) admin 페이지
+import NewsCreatePage from "./pages/AdminPage/NewsUpdatePage/NewsCreatePage.tsx";  // 뉴스 등록
+import NewsEditPage from "./pages/AdminPage/NewsUpdatePage/NewsEditPage.tsx";      // 뉴스 수정
+import ContactBoardPage from "./pages/AdminPage/ContactBoardPage/ContactBoardPage";                   // 문의하기 게시판
+import ContactBoardDetailPage from "./pages/AdminPage/ContactBoardPage/ContactBoardDetailPage.tsx";  // 개별 문의글 클릭 시 나오는 화면
+
+// ------------------------------------------------------------------------------------------------
+
+import AuthProvider from "./contexts/AuthProvider";  // 로그인 상태/사용자 정보/권한을 앱 전역에 공급하는 용도 => 로그인했는지, 누구인지, 권한이 뭔지를 기억
+import RequireRole from "./routes/RequireRole";      // 특정 경로에 들어가기 전에 권한 체크하는 용도 => normal 유저는 공개 페이지만 접근가능하고, admin 유저는 admin 페이지에도 접근가능
+
+// ----------------------- 매칭되는 라우트가 없을 때(=404 상황) 보여줄 간단한 화면 --------------------------------
 export function NotFound() {
   return <div style={{ padding: 24 }}>404 Not Found 페이지를 찾을 수 없습니다.</div>; 
 }
 
-// 
+// --------------------------------------------------------------------------------------------
+
 const router = createBrowserRouter([
   { 
     // { path: "/", element: <App /> } => 최상위 부모 라우트
@@ -92,29 +106,66 @@ const router = createBrowserRouter([
       // => 라우트 경로: media/:slug, 실제 매칭된 slug 값: bidderlive-1m-user, 렌더: <App />(틀) + <NewsDetailPage />(본문)
       { path: "media/:slug", element: <NewsDetailPage /> }, 
 
-      // 나머지 정적 라우트들
-      { path: "login", element: <LoginPage /> },            // ★ /login에서 아이디에 admin/user 포함 여부로 역할 결정 → AuthContext.login() 호출
+      // 4. 와일드 카드 라우트
+      // 사용자가 입력한 URL이 자식 라우트 목록 중 어디에도 맞지 않으면 이 라우트가 매칭된다.
+      { path: "*", element: <NotFound /> },
+
+      // 5. 나머지 정적/동적 라우트들
+      // (1) 로그인/회원가입
+      { path: "login", element: <LoginPage /> },            
       { path: "signup", element: <SignUpPage /> },
       { path: "signup/success", element: <SignUpSuccessPage /> },
 
+      // (2) 아이디 찾기
       { path: "find-id", element: <FindIdPage /> },
       { path: "find-id/success", element: <FindIdResultSuccessPage /> },
       { path: "find-id/fail", element: <FindIdResultFailPage /> },
 
+      // (3) 비밀번호 찾기
       { path: "find-password", element: <FindPasswordPage /> },
       { path: "find-password/success", element: <FindPasswordResultSuccessPage /> },
       { path: "find-password/fail", element: <FindPasswordResultFailPage /> },
 
+      // (4) 비밀번호 변경
       { path: "change-password", element: <ChangePasswordPage /> },
       { path: "change-password/complete", element: <ChangePasswordCompletePage /> },
 
-      // 4. 와일드 카드 라우트
-      // 사용자가 입력한 URL이 자식 라우트 목록 중 어디에도 맞지 않으면 이 라우트가 매칭된다.
-      { path: "*", element: <NotFound /> }
+      // (5) 뉴스룸 업데이트
+      { path: "media/new", element: <NewsCreatePage /> },
+      { path: "media/:slug/edit", element: <NewsEditPage /> },
+
+      // (6) SUPER_ADMIN 전용 - 회원 등급 관리 페이지
+      { 
+        path: "admin/users",
+        element: (
+          <RequireRole allowed={["SUPER_ADMIN"]}>
+            <UserManagementPage />
+          </RequireRole>
+        )
+      },
+      
+      // (7) ADMIN/SUPER_ADMIN 전용 - 문의하기 게시판
+      {
+        path: "contact/board",
+        element: (
+          <RequireRole allowed={["ADMIN", "SUPER_ADMIN"]}>
+            <ContactBoardPage />
+          </RequireRole>
+        )
+      },
+      {
+        path: "contact/board/:id",
+        element: (
+          <RequireRole allowed={["ADMIN", "SUPER_ADMIN"]}>
+            <ContactBoardDetailPage />
+          </RequireRole>
+        )
+      }
     ]
   }
 ]);
 
+// --------------------------------------------------------------------------------------------------
 // document.getElementById('root')! => index.html 안에 있는 <div id="root"></div> 이 부분을 찾는 코드
 // createRoot() => React 렌더링(컴포넌트를 화면에 그리는 과정) 엔진 초기화
 // .render() => App 컴포넌트를 실제 HTML에 그림

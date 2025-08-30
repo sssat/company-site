@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./NewsCreatePage.module.css";
-import { useAuth } from "../../hooks/useAuth"; // 관리자 체크
+import { useAuth } from "../../../hooks/useAuth"; // 관리자 체크
 
 type Category = "internal" | "external";
 

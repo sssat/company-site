@@ -1,0 +1,114 @@
+/* 섹션 페이드업 */
+.section {
+  padding: 0;
+  margin: 80px 0 0;
+  opacity: 0;
+  transform: translateY(48px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+}
+.show { opacity: 1; transform: translateY(0); }
+
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto 120px;
+  padding: 0 20px;
+}
+
+.title {
+  font-family: "Poppins","Noto Sans KR",sans-serif;
+  font-weight: 900;
+  font-size: 32px;
+  margin: 0 0 30px;
+}
+
+.noticeRow { margin: 6px 0 20px; }
+
+/* 메타 정보 (제목/작성자/이메일/날짜/상태) */
+.meta {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0;
+  border-bottom: 1px solid #eef2f7;
+}
+.row:last-child { border-bottom: none; }
+
+/* 모든 셀 세로 가운데 정렬 */
+.head, .body {
+  display: flex;
+  align-items: center;
+}
+
+.head {
+  background: #f8fafc;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 10px 12px;
+  color: #111827;
+  border-right: 1px solid #eef2f7;
+}
+.body {
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #111827;
+}
+
+/* 상태 텍스트 색상 */
+.statusPending {
+  color: #ef4444; /* 빨강 */
+  font-weight: 800;
+}
+.statusDone {
+  color: #16a34a; /* 초록 */
+  font-weight: 800;
+}
+
+/* 본문(문의 내용) */
+.messageBox {
+  margin: 22px 0 24px;
+  min-height: 280px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px 14px;
+  line-height: 1.7;
+  font-size: 14px;
+  color: #111827;
+  white-space: pre-wrap;
+}
+
+/* 액션 버튼 — 스샷처럼 회색 버튼 */
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.btn {
+  min-width: 96px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #f3f4f6;   /* 연회색 */
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  font-weight: 800;
+  color: #111827;
+}
+.btn:hover { background: #e5e7eb; }
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* not found */
+.notfound {
+  margin: 12px 0 16px;
+  color: #6b7280;
+}
