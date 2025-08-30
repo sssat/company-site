@@ -59,6 +59,8 @@ import ChangePasswordPage from "./pages/AuthPage/ChangePasswordPage/ChangePasswo
 import ChangePasswordCompletePage from "./pages/AuthPage/ChangePasswordPage/ChangePasswordCompletePage";
 // -----------------------------------------------------------------------------------------
 
+import AuthProvider from "./contexts/AuthProvider";
+
 // 매칭되는 라우트가 없을 때(=404 상황) 보여줄 간단한 화면
 export function NotFound() {
   return <div style={{ padding: 24 }}>404 Not Found 페이지를 찾을 수 없습니다.</div>; 
@@ -90,9 +92,8 @@ const router = createBrowserRouter([
       // => 라우트 경로: media/:slug, 실제 매칭된 slug 값: bidderlive-1m-user, 렌더: <App />(틀) + <NewsDetailPage />(본문)
       { path: "media/:slug", element: <NewsDetailPage /> }, 
 
-
       // 나머지 정적 라우트들
-      { path: "login", element: <LoginPage /> },
+      { path: "login", element: <LoginPage /> },            // ★ /login에서 아이디에 admin/user 포함 여부로 역할 결정 → AuthContext.login() 호출
       { path: "signup", element: <SignUpPage /> },
       { path: "signup/success", element: <SignUpSuccessPage /> },
 
@@ -119,8 +120,11 @@ const router = createBrowserRouter([
 // .render() => App 컴포넌트를 실제 HTML에 그림
 // <React.StrictMode> => React의 개발용 도우미(디버깅 도구) -> 개발 중 실수나 문제를 미리 감지
 // <RouterProvider router={router} /> => React Router에서 라우팅 시스템 전체를 앱에 공급하는 컴포넌트
+// <AuthProvider>로 감싸 앱 전역에 로그인 상태/역할(Role)을 제공
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </React.StrictMode>
 );
