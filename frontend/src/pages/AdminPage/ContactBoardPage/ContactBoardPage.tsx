@@ -42,6 +42,7 @@ export default function ContactBoardPage() {
   const [page, setPage] = useState(1);
   const TICKETS = getTickets();
 
+  // 현재 화면에 표시될(필터링된) 데이터
   const filtered = useMemo(() => {
     const keyword = q.trim().toLowerCase();
     if (!keyword) return TICKETS;
@@ -73,8 +74,12 @@ export default function ContactBoardPage() {
       aria-label="문의하기 관리"
     >
       <div className={styles.wrap}>
-        
         <h1 className={styles.title}>문의하기 관리</h1>
+
+        {/* 상단 메타(총 개수 표시) — 필터 적용 결과 개수 */}
+        <div className={styles.metaRow} aria-live="polite">
+          <span className={styles.totalCount}>총 {filtered.length.toLocaleString()}개</span>
+        </div>
 
         <div className={styles.tableWrap}>
           <table className={styles.table}>

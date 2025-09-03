@@ -1,3 +1,5 @@
+# config/는 앱이 아니라 프로젝트의 설정 전용 폴더이다.
+
 from pathlib import Path        
 from datetime import timedelta  # JWT 수명 설정에 사용
 import environ                  # .env 파일을 읽어 환경 변수로 파싱하는 라이브러리
@@ -19,7 +21,10 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  #
 
 # ───────────────── 앱 등록 ─────────────────
 # Django에 “이 프로젝트에서 사용할 앱 목록”을 등록
-# Django에서 앱(App) 은 기능 단위 모듈 -> 프로젝트를 잘게 쪼갠 독립 기능 묶음
+# Django에서 앱(App) 은 프로젝트 안의 기능 단위 모듈(패키지)이다. -> 프로젝트는 여러 앱으로 쪼개진다.
+# 앱은 폴더 하나이며, 그 안에 models.py, views.py, urls.py, admin.py, migrations/ 등이 들어있다.
+# 앱을 쓰려면 settings.py의 INSTALLED_APPS에 등록해야 한다.
+# 앱은 보통 도메인 별로 나눈다. accounts(회원/권한), news(뉴스/콘텐츠), inquiries(문의), ...
 INSTALLED_APPS = [
     "django.contrib.admin",           # 관리자 사이트(/admin) 기능. 관리자 화면 쓰려면 필수
     "django.contrib.auth",            # 사용자/권한/인증 시스템. 로그인/로그아웃 등
@@ -33,9 +38,10 @@ INSTALLED_APPS = [
     "corsheaders",      # CORS(다른 출처(origin)에서 오는 요청을 허용할지/막을지 정하는 웹브라우저의 보안 규칙) 헤더를 추가/관리하는 미들웨어를 제공 -> 프론트(React, http://localhost:5173)랑 백엔드(Django, http://localhost:8000)가 포트가 달라서 서로 통신을 못하는데 corsheaders 얘를 쓰면 허용해줌.
 
     # 로컬 앱 (내가 만든 앱)
-    # 회원 관리(인증/인가) 기능을 담는 전용 앱
-    # 기본 User 모델(django.contrib.auth)만으로 로그인/회원가입/비번변경 같은 건 구현할 수 있지만 커스터마이징 하기 위해 사용
-    "accounts"
+    # 기본 모델(django.contrib.auth)만으로도 로그인/회원가입/비번변경 같은 건 구현할 수 있지만 커스터마이징 하기 위해 사용
+    "accounts",
+    "news",
+    "inquiries"
 ]
 
 # ───────────────── 미들웨어 ─────────────────

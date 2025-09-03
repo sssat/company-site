@@ -108,7 +108,7 @@ export default function UserManagementPage() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>ID</th>
+                <th>NO</th>
                 <th>이름</th>
                 <th>아이디</th>
                 <th>역할</th>

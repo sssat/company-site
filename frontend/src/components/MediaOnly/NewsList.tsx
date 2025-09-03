@@ -55,12 +55,17 @@ export default function NewsList() {
     return () => io.disconnect();
   }, []);
 
-  // 필터링/검색 결과
+  // 필터링/검색 결과 (제목 + 요약 검색)
   const filtered = useMemo(() => {
     const base = tab === "all" ? items : items.filter((n) => n.category === tab);
     const q = query.trim().toLowerCase();
     if (!q) return base;
-    return base.filter((n) => n.title.toLowerCase().includes(q));
+
+    return base.filter((n) => {
+      const inTitle = n.title.toLowerCase().includes(q);
+      const inExcerpt = (n.excerpt ?? "").toLowerCase().includes(q);
+      return inTitle || inExcerpt;
+    });
   }, [items, tab, query]);
 
   // 페이지네이션 계산
@@ -170,7 +175,6 @@ export default function NewsList() {
           {isManager && (
             <div className={styles.topBtns}>
               {selectMode ? (
-                // ✅ 선택 모드일 때는 "선택 해제"만 표시 (선택취소 제거)
                 <button
                   type="button"
                   className={`${styles.adminBtn} ${styles.primary}`}
@@ -251,7 +255,6 @@ export default function NewsList() {
           <>
             {selectMode ? (
               <div className={styles.adminActions}>
-                {/* ✅ 수정 버튼에 primary 적용(#2563eb) */}
                 <button
                   type="button"
                   className={`${styles.adminBtn} ${styles.primary}`}
@@ -284,10 +287,10 @@ export default function NewsList() {
         <form className={styles.search} onSubmit={onSubmit}>
           <input
             className={styles.searchInput}
-            placeholder="Search"
+            placeholder="검색 (제목/요약)"
             value={qInput}
             onChange={(e) => setQInput(e.target.value)}
-            aria-label="뉴스 검색"
+            aria-label="뉴스 검색 (제목/요약)"
           />
           <button className={styles.searchBtn} type="submit">검색</button>
         </form>

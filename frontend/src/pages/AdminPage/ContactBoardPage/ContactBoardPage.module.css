@@ -1,4 +1,5 @@
-/* 기존 내용 그대로 + 제목 버튼 스타일만 추가 */
+/* src/pages/ContactBoardPage/ContactBoardPage.module.css */
+/* 기존 내용 그대로 + '총 OO개' 스타일 추가 */
 
 /* 섹션 페이드업 */
 .section {
@@ -22,7 +23,20 @@
   font-family: "Poppins","Noto Sans KR",sans-serif;
   font-weight: 900;
   font-size: 32px;
-  margin: 0 0 30px;
+  margin: 0 0 8px; /* 카운트와 간격 확보 */
+}
+
+/* 상단 메타(총 개수) */
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* ← 오른쪽 정렬 */
+  margin: 0 0 16px;
+}
+.totalCount {
+  font-size: 14px;
+  font-weight: 800;
+  color: #6b7280; /* 회색톤 */
 }
 
 /* 상단 공지(관리자 안내) */
@@ -124,4 +138,5 @@
 /* 반응형 */
 @media (max-width: 640px) {
   .title { font-size: 26px; }
+  .totalCount { font-size: 13px; }
 }

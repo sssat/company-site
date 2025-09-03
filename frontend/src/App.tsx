@@ -13,7 +13,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   // 인자 사용 안 하므로 생략해 unused-vars 경고 제거
   static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
-    return { hasError: true };
+    return { hasError: true };  
   }
 
   componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
