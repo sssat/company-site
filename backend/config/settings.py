@@ -1,4 +1,14 @@
-# config/는 앱이 아니라 프로젝트의 설정 전용 폴더이다.
+# config/는 앱이 아니라 프로젝트 전체의 공통 설정을 담당하는 폴더이다.
+# 1. settings.py: 프로젝트 전역의 환경을 정의한다.
+# 2. urls.py: 프로젝트 전역 URL 라우팅을 관리한다.
+# 3. wsgi.py: WSGI(Web Server Gateway Interface) 서버용 진입점 파일
+# 4. asgi.py: ASGI(Asynchronous Server Gateway Interface) 서버용 진입점 파일
+# 5. wsgi.py vs asgi.py 차이점
+# (1) wsgi.py
+# => 동기(Synchronous) 전용, 일반 웹 요청(HTTP), 전통적인 방식, 안정적
+# (2) asgi.py
+# => 비동기(Asynchronous) + 동기 둘 다 지원, 실시간 서비스(WebSocket), 채팅, 스트리밍, 동시성 처리에 강점
+# 둘 다 배포할 때 쓰는 파일이고 서비스 성격에 따라 보통은 둘 중 하나만 쓴다. 그래서 회사소개 홈페이지 처럼 단순 HTTP 서비스라면 배포 시 wsgi.py만 사용한다.
 
 from pathlib import Path        
 from datetime import timedelta  # JWT 수명 설정에 사용
@@ -38,8 +48,7 @@ INSTALLED_APPS = [
     "corsheaders",      # CORS(다른 출처(origin)에서 오는 요청을 허용할지/막을지 정하는 웹브라우저의 보안 규칙) 헤더를 추가/관리하는 미들웨어를 제공 -> 프론트(React, http://localhost:5173)랑 백엔드(Django, http://localhost:8000)가 포트가 달라서 서로 통신을 못하는데 corsheaders 얘를 쓰면 허용해줌.
 
     # 로컬 앱 (내가 만든 앱)
-    # 기본 모델(django.contrib.auth)만으로도 로그인/회원가입/비번변경 같은 건 구현할 수 있지만 커스터마이징 하기 위해 사용
-    "accounts",
+    "accounts",   # 기본 모델(django.contrib.auth)만으로도 로그인/회원가입/비번변경 같은 건 구현할 수 있지만 커스터마이징 하기 위해 사용
     "news",
     "inquiries"
 ]
