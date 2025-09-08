@@ -34,6 +34,8 @@
 # (3) 그리고 이 모델 객체가 DB에 저장됨
 # ─────────────────────────────────────────────────────────────────────────────
 
+import re
+
 # Django에서 날짜와 시간을 다룰 때 사용하는 유틸리티 모듈
 from django.utils import timezone
 
@@ -78,7 +80,7 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
     # 따라서 시리얼라이저 필드를 정할 때는 api 명세서의 request body, response body의 key값과 models.py의 속성을 참고해서 필드로 집어넣으면된다.
     
     # 1. 아이디 패턴 검사
-    # 사용자가 직접 정의한 필드 => user_id
+    # 모델 필드 오버라이드 - 모델(models.py)에도 존재하는 필드지만, 시리얼라이저에서 직접 재정의 (사용자가 직접 정의한 필드)
     # 그런데 user_id는 User 모델에 이미 존재하는 필드인데도 ModelSerializer로 갖다쓰지않고 직접 정의했는데,
     # 아이디 체크/이메일 체크 시리얼라이저에서는 입력 값 검증(형식체크+중복검사)만 수행하고, DB에 저장하는것 같은 행위를 하지 않기때문에 
     # 굳이 무겁고 불필요하게 많은 기능을 가진 ModelSerializer 대신 가벼운 Serializer를 사용했다.
@@ -113,9 +115,109 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
             # 중복된 아이디가 있으면 유효성 검증 실패를 알리는 예외를 발생시킴
             # 첫 번째 인자: "이미 사용 중인 아이디입니다." -> 사용자에게 보여줄 에러 메시지 -> 이 또한 뷰에서 최종적으로 보여줄지말지 결정
             # 두 번째 인자: code="duplicate" -> 에러 코드 문자열을 함께 제공
+            # 실패 시 -> raise로 함수가 즉시 중단되고 serializer.errors에 에러 코드 문자열(duplicate)을 담아서 뷰로 전달 
             raise serializers.ValidationError("이미 사용 중인 아이디입니다.", code="duplicate")
         
         # 중복이 없으면 검증을 통과시키고 검증된 값(value = user_id)를 그대로 뷰로 반환
-        # 성공 -> user_id(value)가 serializer.validated_data에 저장되어 뷰로 전달됨
-        # 실패 -> serializer.errors에 에러 코드 문자열을 담아서 뷰로 전달 
+        # 성공 시 -> return으로 반환된 user_id(value)가 serializer.validated_data에 저장되어 뷰로 전달됨
         return value
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. 이메일 체크 - request 전용 시리얼라이저
+# ─────────────────────────────────────────────────────────────────────────────
+
+# EmailField: 이메일 주소 형식 검증을 자동으로 수행하는 DRF 기본 필드
+# 이메일 형식은 EmailField가 이미 자동 검증 수행 (예: example@domain.com) -> 여기서는 추가로 허용 도메인 체크만 하면 됨.
+class EmailPrecheckRequestSerializer(serializers.Serializer):
+
+    # 모델 필드 오버라이드
+    email = serializers.EmailField(
+        max_length=150, 
+        trim_whitespace=True,
+        error_messages={
+            "invalid": "이메일 형식이 올바르지 않습니다."
+        }
+    )
+
+    def validate_email(self, value: str) -> str:
+
+        # 1. 허용 도메인 목록 정의
+        allowed_domains = {"gmail.com", "naver.com", "kakao.com"}
+
+        # EmailField가 이미 형식 검증을 끝냈으므로 여기서는 안전하게 split 가능
+        # domain = ["example", "gmail.com"]
+        domain = value.split("@")[1].lower()
+
+        # 2. 도메인이 허용 목록에 있는지 확인
+        if domain not in allowed_domains:
+            raise serializers.ValidationError(
+                f"허용되지 않은 도메인입니다. ({', '.join(allowed_domains)} 만 사용가능합니다.)",
+                code="invalid_domain"
+            )
+
+        # 3. 중복 여부 확인
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("이미 사용 중인 이메일입니다.", code="duplicate")
+
+        # 모든 검증 통과 시 원래 값(email) 반환
+        return value
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. 회원가입 - request 전용 시리얼라이저
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RegisterRequestSerializer(serializers.ModelSerializer):
+
+    # 모델 필드 오버라이드
+    # source="user_name" -> 내부적으로 모델의 user_name 필드와 연결
+    username = serializers.CharField(source="user_name", max_length=100)
+
+    # 커스텀 필드 - 모델(models.py)에 없고 사용자가 새롭게 만들어낸 필드 (사용자가 직접 정의한 필드)
+    # 비밀번호 생성규칙 중 8~16자 규칙처럼 단순하고 기본적인 검증은 필드에서 처리하고 나머지는 validate()에서 처리함
+    # write_only=True => 요청에서만 사용가능. 응답에는 포함되지 않음.
+    # 요청(Request): 클라이언트 -> 서버로 데이터를 보낼 때 사용 가능 (request body로는 이 데이터를 보낼 수 있음)
+    # 응답(Response): 서버 -> 클라이언트로 데이터를 보낼 때는 자동으로 제외됨 (response body로는 이 데이터가 오지 않음)
+    # 즉, 해시 변환 안 된 비밀번호(평문 비밀번호)는 서버로 보낼 수만 있고 서버가 클라이언트에게 다시 돌려주는 일은 없다.
+    password = serializers.CharField(
+        write_only=True, min_length=8, max_length=16, trim_whitespace=True,
+        error_messages={
+            "min_length": "비밀번호는 최소 8자 이상이어야 합니다.",
+            "max_length": "비밀번호는 최대 16자 이하이어야 합니다.",
+            "blank": "비밀번호를 입력해주세요.",
+        },
+    )
+    password2 = serializers.CharField(
+        write_only=True, min_length=8, max_length=16, trim_whitespace=True,
+        error_messages={
+            "min_length": "비밀번호 확인은 최소 8자 이상이어야 합니다.",
+            "max_length": "비밀번호 확인은 최대 16자 이하이어야 합니다.",
+            "blank": "비밀번호 확인을 입력해주세요.",
+        },
+    )
+
+    # 커스텀 필드
+    agree_whether = serializers.BooleanField(write_only=True)
+    id_check_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    email_check_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    # 모델 필드 오버라이드
+    user_id = serializers.CharField(
+        max_length=50,
+        validators=[UniqueValidator(queryset=User.objects.all(), message="이미 사용 중인 아이디입니다.")],
+    )
+    email = serializers.EmailField(
+        max_length=150,
+        validators=[UniqueValidator(queryset=User.objects.all(), message="이미 사용 중인 이메일입니다.")],
+    )
+
+    class Meta:
+        model = User  # models.py의 User 모델 지정
+
+        # 모델 필드는 Meta에서 fields =[...]로 가져오는건 맞지만, 사용자가 직접 정의한 필드(오버라이드, 커스텀)도 집어넣을 수 있기 때문에 fields에 들어있다고 해서 전부 모델 필드인것은 아니다.
+        fields = [
+            "user_id", "password", "password2", "username",
+            "birth_date", "gender", "email",
+            "agree_whether", "id_check_token", "email_check_token",
+        ]
