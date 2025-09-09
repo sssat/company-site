@@ -1,23 +1,26 @@
-# 시리얼라이저(Serializer)
-# <역할>
+# <DRF에서 시리얼라이저(Serializer)의 역할>
 # (1) JSON <-> 파이썬 객체 변환: 데이터(모델 객체 = 클래스의 인스턴스)를 JSON 형식으로 변환하거나, 반대로 JSON -> 모델 객체로 변환하는 도구 => 쉽게말해, 백엔드와 프론트엔드가 서로 통신할 때 데이터 형식을 맞춰주는 통역사 같은 역할
 # 예를들어 <User: id=1, username='testuser', email='test@example.com'> <- 이 모델 객체(클래스 인스턴스)를 
 # { "id": 1, "username": "testuser", "email": "test@example.com" } <- 이러한 JSON으로 바꿔준다.
 # (2) 데이터 검증 (Validation): 프론트엔드에서 보낸 요청 데이터(JSON)가 유효한 값인지 확인 (예: 이메일 형식 확인, 비밀번호 최소 길이 검사, 중복 아이디 체크 등)
 # 이처럼 시리얼라이저에선 입력값 유효성 검증을 수행하고 나머지 비즈니스 로직(토큰 발급, DB 저장, 외부 API 연동, 비즈니스 상태 체크 등)은 뷰에서 보통 수행한다.
 # 따라서 어떤 엔드포인트의 기능이 유효성 검증 + 토큰 발급이라면 유효성 검증은 시리얼라이저에서, 토큰 발급은 뷰에서 처리한다.
+# (3) DB 저장 및 업데이트: serializer.save()를 호출하면 -> 내부적으로 상황에 맞게 create() 또는 update() 호출하여 DB에 저장
+# 보통은 직렬화/역직렬화, 유효성 검증까지가 일반적인 시리얼라이저의 역할이고 DRF에선 추가적으로 DB 저장까지 시리얼라이저가 수행한다.
 
+# <DRF에서 시리얼라이저 작성법>
 # 시리얼라이저는 [models.py, api 명세서]를 토대로 작성한다.
 # 시리얼라이저는 기능별로 따로 만든다. 예를들어 회원가입 시리얼라이저, 로그인 시리얼라이저, 회원정보 조회 시리얼라이저, .... 등등
 # API 엔드포인트(URL)를 하나 만든다면, 그 엔드포인트와 연결된 기능에 대한 시리얼라이저는 거의 항상 필요하다.
 # 그리고 시리얼라이저는 요청용(reauest) 시리얼라이저 / 응답용(response) 시리얼라이저로 나눌 수 있는데, 
 # 만약 요청 데이터(request header + parameter + body)가 있다면 요청용 시리얼라이저는 거의 항상 필수로 만들어줘야 하고, 응답용 시리얼라이저는 상황에 따라 달라진다.
 # 따라서 응답용 시리얼라이저를 serializers.py에서 따로 작성하지 않는다면 응답 데이터(JSON)는 뷰에서 직접 구성해야한다.
-# 요청용 시리얼라이저의 역할은 유효성 체크 + 역직렬화이고, 응답용 시리얼라이저의 주요 역할은 직렬화이다.
-# 이중에서 request body가 존재할때는 거의 항상 시리얼라이저가 필요하고 나머지 request 파라미터나 헤더만 존재한다면 별도의 시리얼라이저가 거의 필요없다.
+# 요청용 시리얼라이저의 역할은 유효성 체크 + 역직렬화 + DB 저장(create, update)이고, 응답용 시리얼라이저의 주요 역할은 직렬화이다.
+# 이중에서 request body가 존재할때는 거의 항상 시리얼라이저가 필요하고 나머지 request 파라미터나 헤더만 존재한다면 별도의 요청용 시리얼라이저가 거의 필요없다.
 # 이 프로젝트에선 요청용 시리얼라이저/일부 응답용 시리얼라이저 둘 다 만들 예정이다.
 # 따라서 요청 데이터 중 유효성 검증에 대한것과 일부 응답 데이터는 시리얼라이저를 만들어서 처리하고 그 외 나머지는 뷰에서 처리할 예정이다.
 
+# <시리얼라이저 작동 방향>
 # 시리얼라이저는 두 가지 방향으로 작동한다.
 # (1) Serialization(직렬화): Python 객체(모델 객체) → JSON
 # (2) Deserialization(역직렬화): JSON → Python 객체(모델 객체)
@@ -34,7 +37,15 @@
 # (3) 그리고 이 모델 객체가 DB에 저장됨
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 import re
+
+# 데이터를 안전하게 서명(Signing)하고 검증(Verification)하기 위한 유틸리티를 제공
+from django.core import signing
+
+# BadSignature: signing.loads()가 실행될 때, 토큰이 위변조되었거나 잘못된 값일 경우 발생하는 예외를 처리하기 위해 사용
+# SignatureExpired: signing.loads() 호출 시, max_age로 설정한 만료시간이 지나면 발생하는 예외를 처리를 하기위해 사용
+from django.core.signing import BadSignature, SignatureExpired
 
 # Django에서 날짜와 시간을 다룰 때 사용하는 유틸리티 모듈
 from django.utils import timezone
@@ -55,83 +66,92 @@ from .models import UserLevel, User
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 아이디 체크 - request 전용 시리얼라이저
+# 1. 아이디 체크 - request 전용 시리얼라이저: 클라이언트 -> 서버로 데이터를 보낼 때 사용
+# 수행 기능: 역직렬화 + 유효성 체크
+# 역직렬화: request body의 JSON을 파이썬 객체로 변환
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ModelSerializer vs Serializer
+# <ModelSerializer vs Serializer>
 # 1. ModelSerializer: 모델(models.py)과 연결되어있는 시리얼라이저를 만들 때 사용
-# (1) 모델 필드 자동 생성 => fields = [...]에 모델 필드 자동 매핑
-# (2) CRUD 기본 동작 자동 구현
+# (1) 모델 필드 자동 생성 => fields = [...]에 사용할 필드 집어넣기만 하면 끝
+# (2) CRUD 기본 동작 자동 구현 => create(), update() 등의 함수 기본 제공
 # (3) 모델 유효성 검증 (max_length, unique 등) => 자동 반영
-# (4) ORM 객체 <-> JSON 자동 변환
+# (4) ORM 객체(모델 객체 <=> DB 테이블의 한 행(row)을 파이썬 객체로 표현한 것) <-> JSON 자동 변환
+# => ORM(Object Relational Mapping): 파이썬 클래스와 데이터베이스 테이블을 1:1로 연결해주는 기술
+# => ORM을 사용하면 SQL문을 직접 작성하지 않고 파이썬 객체를 이용해 DB를 제어할 수 있다.
+# => 장고에서는 models.py의 클래스가 ORM 모델이다.
 
 # 2. Serializer: 모델(models.py)과 연결되지 않은 시리얼라이저를 만들 때 사용
-# (1) 모델 필드 자동 생성 => 직접 선언해야 됨
-# (2) CRUD 기본 동작 자동 구현 => 직접 작성해야 됨
+# (1) 모델 필드 자동 생성 불가능 => 직접 선언해야 됨
+# (2) CRUD 기본 동작 자동 구현 불가능 => create(), update() 등의 함수를 직접 만들어야됨
 # (3) 모델 유효성 검증 (max_length, unique 등) => 직접 코딩해야 함
 # (4) ORM 객체 <-> JSON 자동 변환 => 가능하지만 수동 선언 필요
 class IdPrecheckRequestSerializer(serializers.Serializer):
 
-    # 시리얼라이저 필드란? 
+    # <시리얼라이저 필드란?>
     # API에서 주고받을 데이터의 “한 조각”을 정의한 것 => JSON request body/response body의 key-value 쌍 하나를 표현하는 데이터 단위
     # 예를들어 request body의 JSON 형식이 {"email": "test@test.com", "user_id": "asdf123"}이고,
     # response body의 JSON 형식이 {"user_seq": 1, "email": "test@test.com", "user_name": "홍길동" } 라면
     # 시리얼라이저 필드는 email, user_id, user_seq, user_name이다.
-    # 따라서 시리얼라이저 필드를 정할 때는 api 명세서의 request body, response body의 key값과 models.py의 속성을 참고해서 필드로 집어넣으면된다.
+    # 따라서 시리얼라이저 필드를 정할 때는 api 명세서의 request body, response body의 key값과 models.py의 속성들을 참고해서 필드로 집어넣으면된다.
     
     # 1. 아이디 패턴 검사
     # 모델 필드 오버라이드 - 모델(models.py)에도 존재하는 필드지만, 시리얼라이저에서 직접 재정의 (사용자가 직접 정의한 필드)
     # 그런데 user_id는 User 모델에 이미 존재하는 필드인데도 ModelSerializer로 갖다쓰지않고 직접 정의했는데,
-    # 아이디 체크/이메일 체크 시리얼라이저에서는 입력 값 검증(형식체크+중복검사)만 수행하고, DB에 저장하는것 같은 행위를 하지 않기때문에 
+    # 아이디 체크/이메일 체크 시리얼라이저에서는 유효성 체크(형식체크+중복검사)만 수행하고, DB에 저장(create(), update())하는것 같은 행위를 하지 않기때문에 
     # 굳이 무겁고 불필요하게 많은 기능을 가진 ModelSerializer 대신 가벼운 Serializer를 사용했다.
-    # RegexField는 정규식을 이용해 입력값의 형식을 자동 검증해주는 시리얼라이저 필드 -> 클라이언트가 보낸 값이 지정된 패턴을 만족하지 않으면 ValidationError를 발생시킴
+    # RegexField: 정규식을 이용해 입력값의 형식을 자동 검증해주는 시리얼라이저 필드 -> 클라이언트가 보낸 값이 지정된 패턴을 만족하지 않으면 ValidationError를 발생시킴
     user_id = serializers.RegexField(
         regex=r'^[a-z0-9]{5,20}$',   # 형식: 영문 소문자 + 숫자, 5~20자, 특수문자 불가
         trim_whitespace=True,        # 클라이언트가 실수로 " test123 " 처럼 앞뒤 공백을 넣어도 자동으로 제거
 
-        # 기본 에러 메시지 커스터마이징
+        # <기본 에러 메시지 커스터마이징>
         # 여기서의 에러 메시지는 사용자에게 보여주기 위한 메시지이다. -> 하지만 사용자에게 보여줄지 말지 여부를 뷰에서 결정할 수 있다.
         # api 명세서의 response body에서 내려주는 message 또한 사용자에게 보여주기 위한 역할이다.
         # 명세서의 message 필드는 프론트에서 직접 관리 할 수도 있고 백엔드에서 메시지를 만들어서 보낸다음 프론트는 받아서 출력하게만 할 수도 있는데 이 프로젝트에선 백엔드에서 처리한 후 보낼 예정이다.
         # 그리고 만약 모든 사용자 메시지를 프론트엔드에서 직접 관리하기로 정했다면 API 명세서 response body에서 message 필드는 제외하는 것이 좋다.
         # 여기서의 에러 메시지는 시리얼라이저 검증 후 serializer.errors라는 딕셔너리 형태로 뷰(View)까지 전달된다.
-        # 그리고 api 명세서에서 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)] 일때의 response body는 이미 여기서 로직구현 후 판단까지 했으므로
-        # 뷰에서는 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)]는 포맷구성만 하면되고
-        # [(1) 200 OK 사용가능(중복 X, 형식 오류 X), 2. 400 Bad Request, 3. 429 Too Many Requests]는 로직구현+포맷구성 까지 하면된다.
+        # 그리고 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)] 일때의 response body는 이미 여기서 로직구현(RegexField로 형식 체크, validate_user_id()로 중복 체크) 후 판단까지 했으므로
+        # 뷰에서는 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)]는 포맷구성만 하면되고  
+        # 나머지 [(1) 200 OK 사용가능(중복 X, 형식 오류 X), 2. 400 Bad Request, 3. 429 Too Many Requests]는 뷰에서 로직구현+포맷구성 까지 하면된다.
         error_messages={
             "invalid": "아이디는 영문 소문자와 숫자만 사용 가능하며 5~20자여야 합니다.",  # 정규식에 맞지 않을 때
-            "blank": "아이디를 입력해주세요.", # 빈 문자열 입력 시
+            "blank": "아이디를 입력해주세요.",                                          # 빈 문자열 입력 시
         }
     )
 
     # 2. 아이디 중복 검사 + 개발자가 임의로 정한 에러 코드 문자열 (code="duplicate")
     # validate_<필드명> 형식으로 메서드를 작성하면, DRF가 자동으로 그 필드 값이 유효한지 추가 검증을 수행
+    # 뷰(View) -> serializer = IdPrecheckRequestSerializer(data=request.data) 시리얼라이저 인스턴스 생성 -> serializer.is_valid() 여기서 각 필드 기본 검증(RegexField 등) 수행하고, validate_user_id 함수도 자동 호출
     def validate_user_id(self, value: str) -> str:
 
-        # DB에서 user_id가 동일한 유저가 이미 존재하는지 확인
-        # exists() -> True/False 반환 (데이터가 있는지만 빠르게 체크)
+        # exists() -> True/False 반환 -> 동일한 user_id가 존재하면 True 반환 후 아래 코드 실행
+        # 동일한 user_id가 없다면 False 반환 후 바로 return value
         if User.objects.filter(user_id=value).exists():   
 
             # 중복된 아이디가 있으면 유효성 검증 실패를 알리는 예외를 발생시킴
             # 첫 번째 인자: "이미 사용 중인 아이디입니다." -> 사용자에게 보여줄 에러 메시지 -> 이 또한 뷰에서 최종적으로 보여줄지말지 결정
             # 두 번째 인자: code="duplicate" -> 에러 코드 문자열을 함께 제공
             # 실패 시 -> raise로 함수가 즉시 중단되고 serializer.errors에 에러 코드 문자열(duplicate)을 담아서 뷰로 전달 
+            # 뷰가 받게 되는 것 => serializer.errors = { "user_id":[ { "message": "이미 사용 중인 아이디입니다.","code": "duplicate" }] }
             raise serializers.ValidationError("이미 사용 중인 아이디입니다.", code="duplicate")
         
-        # 중복이 없으면 검증을 통과시키고 검증된 값(value = user_id)를 그대로 뷰로 반환
+        # 중복이 없으면 검증을 통과시키고 검증된 value(user_id)를 그대로 뷰로 반환
         # 성공 시 -> return으로 반환된 user_id(value)가 serializer.validated_data에 저장되어 뷰로 전달됨
         return value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. 이메일 체크 - request 전용 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────────────────────────
 
-# EmailField: 이메일 주소 형식 검증을 자동으로 수행하는 DRF 기본 필드
-# 이메일 형식은 EmailField가 이미 자동 검증 수행 (예: example@domain.com) -> 여기서는 추가로 허용 도메인 체크만 하면 됨.
 class EmailPrecheckRequestSerializer(serializers.Serializer):
 
+    # 1. 이메일 형식 검사
     # 모델 필드 오버라이드
+    # EmailField: 이메일 주소 형식 검증을 자동으로 수행하는 DRF 기본 필드 -> 클라이언트가 보낸 값이 이메일 형식 패턴을 만족하지 않으면 ValidationError를 발생시킴
+    # 이메일 형식은 EmailField가 이미 자동 검증 수행 (예: example@domain.com) -> 따라서 여기서는 추가로 허용 도메인 체크만 하면 됨.
     email = serializers.EmailField(
         max_length=150, 
         trim_whitespace=True,
@@ -140,23 +160,24 @@ class EmailPrecheckRequestSerializer(serializers.Serializer):
         }
     )
 
+    # 2. 이메일 중복 + 도메인 검사
     def validate_email(self, value: str) -> str:
 
-        # 1. 허용 도메인 목록 정의
+        # (1) 허용 도메인 목록 정의
         allowed_domains = {"gmail.com", "naver.com", "kakao.com"}
 
         # EmailField가 이미 형식 검증을 끝냈으므로 여기서는 안전하게 split 가능
         # domain = ["example", "gmail.com"]
         domain = value.split("@")[1].lower()
 
-        # 2. 도메인이 허용 목록에 있는지 확인
+        # (2) 도메인이 허용 목록에 있는지 확인
         if domain not in allowed_domains:
             raise serializers.ValidationError(
                 f"허용되지 않은 도메인입니다. ({', '.join(allowed_domains)} 만 사용가능합니다.)",
                 code="invalid_domain"
             )
 
-        # 3. 중복 여부 확인
+        # (3) 중복 여부 확인
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("이미 사용 중인 이메일입니다.", code="duplicate")
 
@@ -166,6 +187,7 @@ class EmailPrecheckRequestSerializer(serializers.Serializer):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. 회원가입 - request 전용 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크 + DB에 저장
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RegisterRequestSerializer(serializers.ModelSerializer):
@@ -175,13 +197,16 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user_name", max_length=100)
 
     # 커스텀 필드 - 모델(models.py)에 없고 사용자가 새롭게 만들어낸 필드 (사용자가 직접 정의한 필드)
-    # 비밀번호 생성규칙 중 8~16자 규칙처럼 단순하고 기본적인 검증은 필드에서 처리하고 나머지는 validate()에서 처리함
+    # 비밀번호 생성규칙 중 8~16자 규칙처럼 단순하고 기본적인 검증은 필드에서 처리하고 나머지 복잡한 규칙은 validate()에서 처리함
+    # CharField: 문자열을 입력받아 유효성을 검증하고, 직렬화/역직렬화 과정을 담당 -> 클라이언트가 보낸 비밀번호가 기본 검증 규칙을 만족하지 않으면 ValidationError를 발생시킴
     # write_only=True => 요청에서만 사용가능. 응답에는 포함되지 않음.
-    # 요청(Request): 클라이언트 -> 서버로 데이터를 보낼 때 사용 가능 (request body로는 이 데이터를 보낼 수 있음)
-    # 응답(Response): 서버 -> 클라이언트로 데이터를 보낼 때는 자동으로 제외됨 (response body로는 이 데이터가 오지 않음)
+    # write_only=True일때의 요청(Request): 클라이언트 -> 서버로 데이터를 보낼 때 사용 가능 (request body로는 이 데이터를 보낼 수 있음)
+    # write_only=True일때의 응답(Response): 서버 -> 클라이언트로 데이터를 보낼 때 이 데이터는 자동으로 제외됨 (response body로는 이 데이터가 오지 않음)
     # 즉, 해시 변환 안 된 비밀번호(평문 비밀번호)는 서버로 보낼 수만 있고 서버가 클라이언트에게 다시 돌려주는 일은 없다.
     password = serializers.CharField(
         write_only=True, min_length=8, max_length=16, trim_whitespace=True,
+
+        # 여기 에러메시지 부터는 api 명세서의 response body에 반영 안함
         error_messages={
             "min_length": "비밀번호는 최소 8자 이상이어야 합니다.",
             "max_length": "비밀번호는 최대 16자 이하이어야 합니다.",
@@ -198,11 +223,24 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     )
 
     # 커스텀 필드
-    agree_whether = serializers.BooleanField(write_only=True)
+    agree_whether = serializers.BooleanField(write_only=True)  # 이건 보안 문제 때문이 아니라 굳이 response로 받을 필요가 없기 때문에 write_only
+    
+    # 커스텀 필드
+    # 얘네들도 굳이 response로 받을 필요가 없기 때문에 write_only
+    # required=False: request body에 토큰 관련 필드가 없어도 오류가 발생하지 않음 
+    # allow_blank=True: 빈 문자열 허용
+    # => 필드가 없어도 되고 있어도 빈 문자열 허용 (예: {"id_check_token": ""} -> 통과)
+    # => 여기서는 일단 통과시켰다가 밑에 validate()에서 제대로 검사한다.
     id_check_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
     email_check_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     # 모델 필드 오버라이드
+    # 여기서의 검증은 중복검사 + 필드 자체검증만 수행
+    # 아이디/이메일은 위에서 별도의 시리얼라이저를 만들었기 때문에 총 2번의 검증을 거치게된다.
+    # error_messages -> 필드 자체 에러 메시지 -> CharField, EmailField, RegexField 등에서 사용
+    # message -> UniqueValidator 클래스의 중복 검사 에러 메시지 -> error_message라고 작성하면 동작하지 않음
+    # 여기서의 메시지도 사용자에게 보여주기 위한 메시지이고, 사용자에게 보여줄지 말지 여부를 뷰에서 결정할 수 있다.
+    # 따라서 명세서 response body의 응답 예시에 반영해야하지만 안할 예정이다.
     user_id = serializers.CharField(
         max_length=50,
         validators=[UniqueValidator(queryset=User.objects.all(), message="이미 사용 중인 아이디입니다.")],
@@ -216,8 +254,213 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
         model = User  # models.py의 User 모델 지정
 
         # 모델 필드는 Meta에서 fields =[...]로 가져오는건 맞지만, 사용자가 직접 정의한 필드(오버라이드, 커스텀)도 집어넣을 수 있기 때문에 fields에 들어있다고 해서 전부 모델 필드인것은 아니다.
+        # 또한 ModelSerializer에선 Serializer와 달리 필드를 사용하려면 위에서 정의한 필드라고 할지라도 반드시 fields에 전부 넣어놔야 한다.
         fields = [
             "user_id", "password", "password2", "username",
             "birth_date", "gender", "email",
             "agree_whether", "id_check_token", "email_check_token",
         ]
+
+    # <여기서부턴 복잡한 검증 수행하는 함수 정의>
+    # ── 1. 약관 정책 동의 검증 - 단일 필드 검증 ─────────────────────────────────────────────────────────
+    # 통과 시 값(True)을 그대로 리턴 -> validated_data['agree_whether'] = True로 저장된다.
+    def validate_agree_whether(self, v: bool) -> bool:
+        if v is not True:
+            raise serializers.ValidationError("약관/정책 동의가 필요합니다.")
+        return v
+
+    # ── 2. 비밀번호 정책 헬퍼함수 ────────────────────────────────────────────────────
+    # 헬퍼 함수 => 어떤 기능을 수행하는 주요 함수 안에서 반복되거나 복잡한 작업을 분리해 놓은 작은 보조 함수
+    # 가독성과 유지보수를 위해 코드 일부를 분리해 독립적으로 만든다.
+    # validate()가 회원가입 시 모든 검증을 담당하는 본 함수이고, 얘네들은 validate() 안에서만 쓰이는 보조 함수
+
+    # (1) (대문자/소문자/숫자/특수문자) 중 3종 이상 포함
+    def _has_3_of_4_categories(self, pw: str) -> bool:
+        categories = 0
+        categories += bool(re.search(r"[A-Z]", pw))          # 대문자가 포함되면 +1
+        categories += bool(re.search(r"[a-z]", pw))          # 소문자가 포함되면 +1
+        categories += bool(re.search(r"\d", pw))             # 숫자가 포함되면 +1
+        categories += bool(re.search(r"[^A-Za-z0-9]", pw))   # 특수문자가 포함되면 +1
+
+        return categories >= 3  # 3 이상이면 True 반환
+
+    # (2) 연속 숫자 4자리(오름/내림) 금지: 1234, 2345, 4321, 9876 등
+    def _has_sequential_digits_4(self, pw: str) -> bool:
+        for m in re.finditer(r"\d{4,}", pw):
+            run = m.group()
+            for i in range(len(run) - 3):
+                w = run[i:i+4]
+                diffs = [int(w[j+1]) - int(w[j]) for j in range(3)]
+                if all(d == 1 for d in diffs) or all(d == -1 for d in diffs):
+                    return True  # 연속 숫자가 있다면 True 반환
+        return False             # 연속 숫자가 없다면 False 반환
+
+    # (3) 동일 문자 4회 연속 금지
+    def _has_4_same_in_a_row(self, pw: str) -> bool:
+        return bool(re.search(r"(.)\1{3,}", pw))  # 같은 문자가 4회이상 발견되면 True 반환. 없으면 False 반환
+
+    # (4) 비밀번호에 user_id의 3글자 이상 연속 부분문자열 포함 금지(대소문자 무시)
+    # 예를 들어, 아이디가 abcdef일 때 비밀번호가 xyzABC123!라면 -> ABC가 들어 있으므로 정책 위반
+    def _contains_userid_substring(self, pw: str, user_id: str, min_len: int = 3) -> bool:
+        if not user_id:
+            return False
+        a = pw.lower()
+        b = str(user_id).lower()
+        for L in range(min_len, len(b) + 1):
+            for i in range(0, len(b) - L + 1):
+                sub = b[i:i+L]
+                if sub and sub in a:
+                    return True  # 정책 위반 시 True 반환
+        return False             # 통과 시 False 반환
+
+    # (5) 아이디 중복확인/이메일 중복확인 토큰이 유효한지 확인하기 위한 함수
+    def _verify_precheck_token(self, token: str, kind: str, subject: str, max_age: int = 600) -> bool:
+        # token: 프론트엔드에서 전달된 사전 중복검사 토큰 문자열
+        # kind: 'user_id' 또는 'email' -> 토큰이 어떤 검증용인지 구분
+        # subject: 현재 사용자가 입력한 실제 값 (예: 아이디 문자열, 이메일 문자열)
+        # max_age: 토큰의 최대 유효 시간 600초
+
+        # 토큰이 없다면 검증할 필요없이 바로 실패 처리
+        if not token:
+            return False
+        
+        # 토큰 복호화(암호문 -> 평문) 시도
+        # signing.loads(): 서버가 signing.dumps()로 암호화한 토큰을 다시 원래 데이터로 되돌림
+        # Payload (페이로드): 복호화가 끝난 후 꺼내는 실제 핵심 데이터
+        # 복호화 후 나온 딕셔너리(signing.loads()함수의 반환 값) => 예: payload = {"kind": "user_id","sub": "test123"}
+        try:
+            payload = signing.loads(
+                token,
+                salt=f"precheck:{kind}",
+                max_age=max_age,  # 만료 시 SignatureExpired
+            )
+
+        # 토큰 복호화 실패 시 False 반환
+        # BadSignature: 토큰이 위변조되었거나 잘못된 형식
+        # SignatureExpired: 유효 시간이 초과되어 만료
+        except (BadSignature, SignatureExpired):
+            return False
+
+        # 복호화된 토큰(payload)의 내용이 서버에서 기대한 값과 정확히 일치하는지 최종 확인
+        # 최종 return이 True 반환 시 통과
+        return (
+            payload.get("kind") == kind  # user_id == user_id 이면 True. email인데 user_id 토큰이라고 속이면 -> False
+            and str(payload.get("sub", "")).lower() == str(subject).lower()  # test123 == test123 이면 True
+        )
+
+    # ── 3. 회원가입 시 최종 검증을 수행하는 함수 - 여러 필드 교차 검증 ─────────────────────────────────────────────────────────
+    def validate(self, attrs: dict) -> dict:
+        # attrs: 프론트엔드에서 보낸 request body 데이터가 들어있는 딕셔너리
+
+        # request body에 들어있는 값들 꺼내기. 없으면 "" 반환
+        # or "" -> 값이 None이거나 빈 값일 경우에도 강제로 빈 문자열로 통일
+        pw1 = attrs.get("password", "") or ""
+        pw2 = attrs.get("password2", "") or ""
+        user_id = attrs.get("user_id", "") or ""
+        gender = attrs.get("gender")
+
+        # 1) 비밀번호와 비밀번호 확인이 다르면 -> 회원가입 차단
+        if pw1 != pw2:
+            raise serializers.ValidationError({"password2": "비밀번호가 서로 일치하지 않습니다."})
+
+        # 2) 성별 값 허용 범위
+        if gender not in ("M", "F"):
+            raise serializers.ValidationError({"gender": "성별은 'M' 또는 'F'만 허용됩니다."})
+
+        # 3) 비밀번호 보안 정책 검증
+        violations = []
+        if not self._has_3_of_4_categories(pw1):
+            violations.append("대문자/소문자/숫자/특수문자 중 3종 이상을 포함해야 합니다.")
+        if self._has_sequential_digits_4(pw1):
+            violations.append("연속된 숫자 4자를 사용할 수 없습니다(예: 1234, 4321).")
+        if self._has_4_same_in_a_row(pw1):
+            violations.append("동일 문자를 4회 연속 사용할 수 없습니다.")
+        if self._contains_userid_substring(pw1, user_id, min_len=3):
+            violations.append("비밀번호에 아이디의 3글자 이상 연속 문자열을 포함할 수 없습니다.")
+
+        if violations:
+            # 여러 개의 위반사항을 모아 한꺼번에 프론트로 전달
+            # 예: {"password": ["대문자/소문자/숫자/특수문자 중 3종 이상을 포함해야 합니다.","연속된 숫자 4자를 사용할 수 없습니다(예: 1234, 4321)."]}
+            raise serializers.ValidationError({"password": violations})
+
+        # 4) 사전 중복검사 토큰 필수 검증
+        # 회원가입 최종 버튼 누르기 전에 반드시 아이디 중복검사와 이메일 중복검사를 먼저 하고 와야 한다.
+        id_token = attrs.get("id_check_token", "") or ""
+        email_token = attrs.get("email_check_token", "") or ""
+        email = attrs.get("email", "") or ""
+
+        # 만약 프론트가 토큰을 보내지 않았다면 바로 에러 발생
+        if not id_token:
+            raise serializers.ValidationError({"id_check_token": "아이디 중복검사 토큰이 필요합니다."})
+        if not email_token:
+            raise serializers.ValidationError({"email_check_token": "이메일 중복검사 토큰이 필요합니다."})
+
+        # 토큰의 유효성 검증
+        if not self._verify_precheck_token(id_token, kind="user_id", subject=user_id):
+            raise serializers.ValidationError({"id_check_token": "유효하지 않거나 만료된 아이디 토큰입니다."})
+        if not self._verify_precheck_token(email_token, kind="email", subject=email):
+            raise serializers.ValidationError({"email_check_token": "유효하지 않거나 만료된 이메일 토큰입니다."})
+
+        # 검증 통과 -> 최종 반환
+        # 모든 검증을 통과하면, attrs 그대로 반환 -> validated_data에 저장
+        # validated_data에 attrs가 삽입됨
+        # 이후 create() 메서드에서 DB 저장 처리
+        return attrs
+
+    # ── 4. 회원 생성 로직 ──────────────────────────────────────────────────────────────
+    # create() 메서드는 회원가입 시 최종적으로 DB에 사용자 데이터를 저장하는 역할을 함
+    def create(self, validated_data):
+        # validated_data: validate() 메서드에서 검증을 통과한 값들이 담긴 딕셔너리
+
+        # DB에 없는 커스텀 필드 제거
+        validated_data.pop("password2", None)
+        validated_data.pop("agree_whether", None)
+        validated_data.pop("id_check_token", None)
+        validated_data.pop("email_check_token", None)
+
+        # 비밀번호 해시 처리 후 저장
+        # 사용자가 입력한 평문 비밀번호(password)를 꺼냄 -> make_password()로 해시 변환 후 저장
+        raw_pw = validated_data.pop("password")
+        validated_data["password_hash"] = make_password(raw_pw)
+
+        # UserLevel 테이블에서 PK(primary key) 값이 0인 행을 가져옴 => default_level 변수에는 일반회원 객체가 들어감
+        default_level = UserLevel.objects.get(pk=0)
+
+        # 회원가입 시 등급을 자동으로 넣기 위해 사용
+        # setdefault("key", value): 해당 키가 없을 때만 기본값을 추가
+        # validated_data에는 {'user_id': 'hong123', 'grade_code': 일반회원 객체}이 들어감
+        validated_data.setdefault("grade_code", default_level)
+
+        # 언패킹 연산자로 validated_data 딕셔너리의 값들을 하나씩 풀어서 전달
+        # validated_data = { "user_id": "hong123", "password": "Test1234!", "username": "홍길동", ... }
+        return User.objects.create(**validated_data)
+    
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. 회원가입 - response 전용 시리얼라이저: 서버 -> 클라이언트로 데이터를 보낼 때 사용
+# 수행 기능: 직렬화 + 출력 데이터 가공 및 선택
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RegisterResponseSerializer(serializers.ModelSerializer):
+    # API 응답 스펙 맞춤 필드 매핑/가공
+    user_seq = serializers.IntegerField(source="id", read_only=True)         # PK -> user_seq로 노출
+    user_name = serializers.CharField(source="user_name", read_only=True)    # 모델 필드명 그대로 노출
+    grade_name = serializers.SerializerMethodField(read_only=True)           # FK에서 표시용 이름 추출
+
+    class Meta:
+        model = User
+        # 응답에 포함할 필드만 명시 (민감정보/요청용 필드 제외)
+        fields = [
+            "user_seq",       # PK(표시명 변경)
+            "user_id",
+            "user_name",
+            "email",
+            "birth_date",
+            "gender",
+            "grade_name",
+        ]
+        read_only_fields = fields  # 응답 전용이므로 모두 읽기전용
+
+    def get_grade_name(self, obj):
+        level = getattr(obj, "grade_code", None)  # FK(UserLevel)라고 가정
+        return getattr(level, "grade_name", None) if level else None
