@@ -15,15 +15,24 @@
 # 그리고 시리얼라이저는 요청용(reauest) 시리얼라이저 / 응답용(response) 시리얼라이저로 나눌 수 있는데, 
 # 만약 요청 데이터(request header + parameter + body)가 있다면 요청용 시리얼라이저는 거의 항상 필수로 만들어줘야 하고, 응답용 시리얼라이저는 상황에 따라 달라진다.
 # 따라서 응답용 시리얼라이저를 serializers.py에서 따로 작성하지 않는다면 응답 데이터(JSON)는 뷰에서 직접 구성해야한다.
-# 요청용 시리얼라이저의 역할은 유효성 체크 + 역직렬화 + DB 저장(create, update)이고, 응답용 시리얼라이저의 주요 역할은 직렬화이다.
 # 이중에서 request body가 존재할때는 거의 항상 시리얼라이저가 필요하고 나머지 request 파라미터나 헤더만 존재한다면 별도의 요청용 시리얼라이저가 거의 필요없다.
-# 이 프로젝트에선 요청용 시리얼라이저/일부 응답용 시리얼라이저 둘 다 만들 예정이다.
-# 따라서 요청 데이터 중 유효성 검증에 대한것과 일부 응답 데이터는 시리얼라이저를 만들어서 처리하고 그 외 나머지는 뷰에서 처리할 예정이다.
+# 이 프로젝트에선 모든 엔드포인트에 대한 요청용 시리얼라이저/응답용 시리얼라이저 둘 다 만들 예정이다.
+
+# <요청 시리얼라이저 vs 응답 시리얼라이저>
+# 1. reqeust 시리얼라이저
+# (1) 역직렬화
+# (2) 데이터 유효성 검사
+# (3) 데이터 저장 (create() / update())
+
+# 2. response 시리얼라이저
+# (1) 직렬화
+# (2) 출력 데이터 제어 및 가공
+# (예외적) 유효성 검사 -> 백엔드가 실수해서 잘못된 데이터를 프론트로 보내는 걸 막기 위해 마지막에 한 번 더 점검
 
 # <시리얼라이저 작동 방향>
 # 시리얼라이저는 두 가지 방향으로 작동한다.
-# (1) Serialization(직렬화): Python 객체(모델 객체) → JSON
-# (2) Deserialization(역직렬화): JSON → Python 객체(모델 객체)
+# (1) Serialization(직렬화): Python 객체(모델 객체) -> JSON
+# (2) Deserialization(역직렬화): JSON -> Python 객체(모델 객체)
 
 # <CRUD 에서의 동작 과정>
 # 1. GET(조회): DB -> 모델(models.py 안의 클래스) -> JSON -> 프론트엔드
@@ -31,14 +40,17 @@
 # (2) 이 모델은 데이터를 그대로 쓸 수 없기 때문에 -> 시리얼라이저를 통해 데이터를 JSON으로 변환한다.
 # (3) 그리고 JSON을 프론트엔드로 전달한다.
 
-# 2. POST/PUT (등록/수정): 프론트엔드 → JSON → 모델 → DB
+# 2. POST/PUT (등록/수정): 프론트엔드 -> JSON -> 모델 -> DB
 # (1) 프론트엔드가 JSON을 백엔드에 보낸다.
 # (2) 시리얼라이저가 JSON을 받아 역직렬화를 통해 모델 객체로 변환
 # (3) 그리고 이 모델 객체가 DB에 저장됨
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 import re
+
+from typing import Dict, Any
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound
 
 # 데이터를 안전하게 서명(Signing)하고 검증(Verification)하기 위한 유틸리티를 제공
 from django.core import signing
@@ -66,7 +78,7 @@ from .models import UserLevel, User
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 아이디 체크 - request 전용 시리얼라이저: 클라이언트 -> 서버로 데이터를 보낼 때 사용
+# 1. 아이디 체크 - request 전용 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # 역직렬화: request body의 JSON을 파이썬 객체로 변환
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,7 +117,10 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
         regex=r'^[a-z0-9]{5,20}$',   # 형식: 영문 소문자 + 숫자, 5~20자, 특수문자 불가
         trim_whitespace=True,        # 클라이언트가 실수로 " test123 " 처럼 앞뒤 공백을 넣어도 자동으로 제거
 
-        # <기본 에러 메시지 커스터마이징>
+        # <메시지 커스터마이징>
+        # 시리얼라이저에서 처리하는 메시지 -> 에러 메시지 중심 (ValidationError)
+        # 뷰에서 처리하는 메시지 -> 성공 메시지/안내 메시지 중심
+        # 일반적으로 RequestSerializer에서의 메시지는 최종사용자(유저)를 위한거고 ResponseSerializer에서의 메시지는 유저 + 개발자를 위한것이다.
         # 여기서의 에러 메시지는 사용자에게 보여주기 위한 메시지이다. -> 하지만 사용자에게 보여줄지 말지 여부를 뷰에서 결정할 수 있다.
         # api 명세서의 response body에서 내려주는 message 또한 사용자에게 보여주기 위한 역할이다.
         # 명세서의 message 필드는 프론트에서 직접 관리 할 수도 있고 백엔드에서 메시지를 만들어서 보낸다음 프론트는 받아서 출력하게만 할 수도 있는데 이 프로젝트에선 백엔드에서 처리한 후 보낼 예정이다.
@@ -142,7 +157,24 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. 이메일 체크 - request 전용 시리얼라이저
+# 2. 아이디 체크 - response 전용 시리얼라이저
+# 수행 기능: 직렬화
+# 직렬화: 파이썬 객체를 response body의 JSON으로 변환
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UserIdInfoSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()
+    status = serializers.ChoiceField(choices=["available", "invalid", "taken"])
+
+class IdPrecheckResponseSerializer(serializers.Serializer):
+    user_id = UserIdInfoSerializer()                       
+    id_check_token = serializers.CharField(required=False, allow_blank=False)
+    expires_in = serializers.IntegerField(required=False, min_value=1)
+    message = serializers.CharField()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. 이메일 체크 - request 전용 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -186,7 +218,23 @@ class EmailPrecheckRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. 회원가입 - request 전용 시리얼라이저
+# 4. 이메일 체크 - response 전용 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────────────────────────
+
+class EmailInfoSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()  
+    status = serializers.ChoiceField(choices=["available", "invalid", "taken"])  
+
+class EmailPrecheckResponseSerializer(serializers.Serializer):
+    email = EmailInfoSerializer()                            
+    email_check_token = serializers.CharField(required=False, allow_blank=False)  
+    expires_in = serializers.IntegerField(required=False, min_value=1)           
+    message = serializers.CharField()                        
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. 회원가입 - request 전용 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크 + DB에 저장
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -437,30 +485,97 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. 회원가입 - response 전용 시리얼라이저: 서버 -> 클라이언트로 데이터를 보낼 때 사용
-# 수행 기능: 직렬화 + 출력 데이터 가공 및 선택
+# 6. 회원가입 - response 전용 시리얼라이저
+# 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RegisterResponseSerializer(serializers.ModelSerializer):
-    # API 응답 스펙 맞춤 필드 매핑/가공
-    user_seq = serializers.IntegerField(source="id", read_only=True)         # PK -> user_seq로 노출
-    user_name = serializers.CharField(source="user_name", read_only=True)    # 모델 필드명 그대로 노출
-    grade_name = serializers.SerializerMethodField(read_only=True)           # FK에서 표시용 이름 추출
+
+    # 커스텀 필드
+    # read_only=True: 서버에서 응답(Response)으로만 사용되는 읽기 전용 옵션. 서버 -> 클라이언트 방향 단방향 데이터
+    message = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
-        # 응답에 포함할 필드만 명시 (민감정보/요청용 필드 제외)
-        fields = [
-            "user_seq",       # PK(표시명 변경)
-            "user_id",
-            "user_name",
-            "email",
-            "birth_date",
-            "gender",
-            "grade_name",
-        ]
-        read_only_fields = fields  # 응답 전용이므로 모두 읽기전용
+        fields = ["user_seq", "joined_at", "message"]  
 
-    def get_grade_name(self, obj):
-        level = getattr(obj, "grade_code", None)  # FK(UserLevel)라고 가정
-        return getattr(level, "grade_name", None) if level else None
+        # read_only_fields: ModelSerializer에서 제공하는 내장 옵션
+        # read_only=True를 필드마다 하나씩 붙이는 대신, Meta 내부에서 한 번에 묶어서 읽기 전용으로 설정할 수 있다.
+        read_only_fields = fields
+
+
+# ─────────────────────────────────────────────────────────
+# 7. 로그인 - request 시리얼라이저 
+# 수행기능: 역직렬화 + 유효성 검증
+# ─────────────────────────────────────────────────────────
+
+class LoginRequestSerializer(serializers.Serializer):
+    user_id = serializers.CharField(max_length=50, trim_whitespace=True)
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+
+    default_error_messages = {
+        "invalid_credentials": "아이디 or 비밀번호가 일치하지 않습니다.",
+    }
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        uid = attrs.get("user_id")
+        pw = attrs.get("password")
+
+        # 1) 아이디로 사용자 조회
+        user = User.objects.filter(user_id=uid).first()
+        if not user:
+            raise serializers.ValidationError({"message": self.error_messages["invalid_credentials"]})
+
+        # 2) 비밀번호 검증
+        if not check_password(pw, user.password_hash):
+            raise serializers.ValidationError({"message": self.error_messages["invalid_credentials"]})
+
+        # 3) 성공 시: 뷰에서 쓰도록 user만 남기고 password는 제거
+        attrs["user"] = user
+        attrs.pop("password", None)
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────
+# 8. 로그인 - response 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+class LoginResponseSerializer(serializers.Serializer):
+    access = serializers.CharField()  # JWT Access Token
+    role = serializers.ChoiceField(choices=["USER", "ADMIN", "SUPER_ADMIN"])
+    user_seq = serializers.IntegerField()
+    user_id = serializers.CharField()
+    message = serializers.CharField()
+
+
+# ─────────────────────────────────────────
+# 9. 엑세스 토큰 갱신 - response 시리얼라이저
+# ─────────────────────────────────────────
+class TokenRefreshResponseSerializer(serializers.Serializer):
+    access = serializers.CharField(required=False)   # 200일 때만 포함
+    message = serializers.CharField(required=False)  # 401일 때만 포함
+
+    def validate(self, attrs):
+        # access나 message 둘 중 하나는 반드시 존재
+        if "access" not in attrs and "message" not in attrs:
+            raise serializers.ValidationError("access 또는 message 중 하나는 포함되어야 합니다.")
+        # (선택) access 공백 금지
+        if "access" in attrs and not str(attrs["access"]).strip():
+            raise serializers.ValidationError({"access": "공백은 허용되지 않습니다."})
+        return attrs
+
+    def to_representation(self, instance):
+        # 전달된 키만 깔끔히 직렬화
+        rep = {}
+        if "access" in instance:
+            rep["access"] = instance["access"]
+        if "message" in instance:
+            rep["message"] = instance["message"]
+        return rep
+
+
+# ─────────────────────────────────────────
+# 10. 로그아웃 - response 시리얼라이저
+# ─────────────────────────────────────────
+class LogoutResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
