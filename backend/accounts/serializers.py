@@ -5,7 +5,7 @@
 # (2) 데이터 검증 (Validation): 프론트엔드에서 보낸 요청 데이터(JSON)가 유효한 값인지 확인 (예: 이메일 형식 확인, 비밀번호 최소 길이 검사, 중복 아이디 체크 등)
 # 이처럼 시리얼라이저에선 입력값 유효성 검증을 수행하고 나머지 비즈니스 로직(토큰 발급, DB 저장, 외부 API 연동, 비즈니스 상태 체크 등)은 뷰에서 보통 수행한다.
 # 따라서 어떤 엔드포인트의 기능이 유효성 검증 + 토큰 발급이라면 유효성 검증은 시리얼라이저에서, 토큰 발급은 뷰에서 처리한다.
-# (3) DB 저장 및 업데이트: serializer.save()를 호출하면 -> 내부적으로 상황에 맞게 create() 또는 update() 호출하여 DB에 저장
+# (3) DB 저장 및 업데이트: 뷰에서 serializer.save()를 호출하면 -> 내부적으로 상황에 맞게 시리얼라이저에서 create() 또는 update() 호출하여 DB에 저장
 # 보통은 직렬화/역직렬화, 유효성 검증까지가 일반적인 시리얼라이저의 역할이고 DRF에선 추가적으로 DB 저장까지 시리얼라이저가 수행한다.
 
 # <DRF에서 시리얼라이저 작성법>
@@ -18,16 +18,28 @@
 # 이중에서 request body가 존재할때는 거의 항상 시리얼라이저가 필요하고 나머지 request 파라미터나 헤더만 존재한다면 별도의 요청용 시리얼라이저가 거의 필요없다.
 # 이 프로젝트에선 모든 엔드포인트에 대한 요청용 시리얼라이저/응답용 시리얼라이저 둘 다 만들 예정이다.
 
+# <시리얼라이저 vs 뷰(view)>
+# 백엔드 API를 만들 때 이 둘은 함께 동작하지만, "관심사의 분리" 원칙에 따라 책임이 명확하게 나눠진다.
+# 1. 시리얼라이저
+# (1) 직렬화/역직렬화
+# (2) 데이터 유효성 검증
+# (3) 데이터 저장(CRUD 중 CU) -> DRF 한정
+
+# 2. 뷰: 요청(Request) -> 처리 -> 응답(Response) 전체 흐름을 제어하는 컨트롤러
+# (1) 클라이언트에서 들어온 HTTP 요청(GET, POST, PUT, DELETE 등)을 수신
+# (2) 시리얼라이저 호출
+# (3) 복잡한 비즈니스 로직 수행(목적없는 단순 기계적 CRUD가 아닌 서비스 정책, 특정 조건 등이 반영된 CRUD, 외부 API 호출 등)
+
 # <요청 시리얼라이저 vs 응답 시리얼라이저>
 # 1. reqeust 시리얼라이저
 # (1) 역직렬화
 # (2) 데이터 유효성 검사
-# (3) 데이터 저장 (create() / update())
+# (3) 데이터 저장 (create() / update()) -> DRF 한정
 
 # 2. response 시리얼라이저
 # (1) 직렬화
 # (2) 출력 데이터 제어 및 가공
-# (예외적) 유효성 검사 -> 백엔드가 실수해서 잘못된 데이터를 프론트로 보내는 걸 막기 위해 마지막에 한 번 더 점검
+# (예외적) 유효성 검사: 백엔드가 실수해서 잘못된 데이터를 프론트로 보내는 걸 막기 위해 마지막에 한 번 더 점검 -> DRF 한정
 
 # <시리얼라이저 작동 방향>
 # 시리얼라이저는 두 가지 방향으로 작동한다.
@@ -48,8 +60,13 @@
 
 import re
 
+# 파이썬에서 타입 힌트(Type Hint)를 제공하기 위한 모듈. typing에서 Dict와 Any를 가져옴
 from typing import Dict, Any
+
+# DRF에서 제공하는 HTTP 403 Forbidden 예외 클래스. 권한 부족(Authorization 실패) 상황에서 사용
 from rest_framework.exceptions import PermissionDenied
+
+# DRF에서 제공하는 HTTP 404 Not Found 예외 클래스. 요청한 리소스(데이터)가 존재하지 않을 때 사용
 from rest_framework.exceptions import NotFound
 
 # 데이터를 안전하게 서명(Signing)하고 검증(Verification)하기 위한 유틸리티를 제공
@@ -58,9 +75,6 @@ from django.core import signing
 # BadSignature: signing.loads()가 실행될 때, 토큰이 위변조되었거나 잘못된 값일 경우 발생하는 예외를 처리하기 위해 사용
 # SignatureExpired: signing.loads() 호출 시, max_age로 설정한 만료시간이 지나면 발생하는 예외를 처리를 하기위해 사용
 from django.core.signing import BadSignature, SignatureExpired
-
-# Django에서 날짜와 시간을 다룰 때 사용하는 유틸리티 모듈
-from django.utils import timezone
 
 # Django가 제공하는 비밀번호 해싱 유틸리티 함수 -> 비밀번호를 DB에 평문으로 저장하면 보안 취약점이 생기므로 반드시 해싱(단방향 암호화)해야한다.
 # make_password: 사용자가 입력한 평문 비밀번호를 안전하게 해시(hash)로 변환
@@ -113,9 +127,14 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
     # 아이디 체크/이메일 체크 시리얼라이저에서는 유효성 체크(형식체크+중복검사)만 수행하고, DB에 저장(create(), update())하는것 같은 행위를 하지 않기때문에 
     # 굳이 무겁고 불필요하게 많은 기능을 가진 ModelSerializer 대신 가벼운 Serializer를 사용했다.
     # RegexField: 정규식을 이용해 입력값의 형식을 자동 검증해주는 시리얼라이저 필드 -> 클라이언트가 보낸 값이 지정된 패턴을 만족하지 않으면 ValidationError를 발생시킴
+    # 따라서 DRF에서 Field() 클래스는 직렬화/역직렬화 + 간단한 유효성 체크 기능을 가지고있다.
+    # 또한 Field 클래스 내부에는 to_representation(), to_internal_value() 메소드가 존재해서 얘네들이 각각 직렬화/역직렬화를 수행해준다.
+    # 그리고 더 세밀하게 가공하고 싶다면 각각의 메소드를 오버라이드 해서 커스터마이징 하면 된다.
     user_id = serializers.RegexField(
         regex=r'^[a-z0-9]{5,20}$',   # 형식: 영문 소문자 + 숫자, 5~20자, 특수문자 불가
         trim_whitespace=True,        # 클라이언트가 실수로 " test123 " 처럼 앞뒤 공백을 넣어도 자동으로 제거
+        write_only=True,             # 요청 전용 필드 -> 응답에서 제외
+        allow_blank=False,           # 빈 문자열 입력 금지
 
         # <메시지 커스터마이징>
         # 시리얼라이저에서 처리하는 메시지 -> 에러 메시지 중심 (ValidationError)
@@ -163,14 +182,17 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class UserIdInfoSerializer(serializers.Serializer):
-    valid = serializers.BooleanField()
-    status = serializers.ChoiceField(choices=["available", "invalid", "taken"])
+    valid = serializers.BooleanField(read_only=True)
+    status = serializers.ChoiceField(
+        choices=["available", "invalid", "taken"],
+        read_only=True,
+    )
 
 class IdPrecheckResponseSerializer(serializers.Serializer):
-    user_id = UserIdInfoSerializer()                       
-    id_check_token = serializers.CharField(required=False, allow_blank=False)
-    expires_in = serializers.IntegerField(required=False, min_value=1)
-    message = serializers.CharField()
+    user_id = UserIdInfoSerializer(read_only=True)   
+    id_check_token = serializers.CharField(read_only=True)
+    expires_in = serializers.IntegerField(read_only=True, min_value=1)
+    message = serializers.CharField(read_only=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -185,10 +207,13 @@ class EmailPrecheckRequestSerializer(serializers.Serializer):
     # EmailField: 이메일 주소 형식 검증을 자동으로 수행하는 DRF 기본 필드 -> 클라이언트가 보낸 값이 이메일 형식 패턴을 만족하지 않으면 ValidationError를 발생시킴
     # 이메일 형식은 EmailField가 이미 자동 검증 수행 (예: example@domain.com) -> 따라서 여기서는 추가로 허용 도메인 체크만 하면 됨.
     email = serializers.EmailField(
-        max_length=150, 
-        trim_whitespace=True,
+        max_length=150,             
+        trim_whitespace=True,        
+        write_only=True,             
+        allow_blank=False,           
         error_messages={
-            "invalid": "이메일 형식이 올바르지 않습니다."
+            "invalid": "이메일 형식이 올바르지 않습니다.",  # 이메일 형식이 잘못되었을 때
+            "blank": "이메일을 입력해주세요."               # 값이 비었을 때
         }
     )
 
@@ -223,14 +248,17 @@ class EmailPrecheckRequestSerializer(serializers.Serializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class EmailInfoSerializer(serializers.Serializer):
-    valid = serializers.BooleanField()  
-    status = serializers.ChoiceField(choices=["available", "invalid", "taken"])  
+    valid = serializers.BooleanField(read_only=True)  
+    status = serializers.ChoiceField(
+        choices=["available", "invalid", "taken"],
+        read_only=True
+    )
 
 class EmailPrecheckResponseSerializer(serializers.Serializer):
-    email = EmailInfoSerializer()                            
-    email_check_token = serializers.CharField(required=False, allow_blank=False)  
-    expires_in = serializers.IntegerField(required=False, min_value=1)           
-    message = serializers.CharField()                        
+    email = EmailInfoSerializer(read_only=True) 
+    email_check_token = serializers.CharField(read_only=True)  
+    expires_in = serializers.IntegerField(read_only=True, min_value=1)  
+    message = serializers.CharField(read_only=True)                  
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -242,7 +270,14 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
 
     # 모델 필드 오버라이드
     # source="user_name" -> 내부적으로 모델의 user_name 필드와 연결
-    username = serializers.CharField(source="user_name", max_length=100)
+    username = serializers.CharField(
+        source="user_name",
+        max_length=100,
+        trim_whitespace=True,
+        write_only=True,
+        allow_blank=False,
+        error_messages={"blank": "이름을 입력해주세요."},
+    )
 
     # 커스텀 필드 - 모델(models.py)에 없고 사용자가 새롭게 만들어낸 필드 (사용자가 직접 정의한 필드)
     # 비밀번호 생성규칙 중 8~16자 규칙처럼 단순하고 기본적인 검증은 필드에서 처리하고 나머지 복잡한 규칙은 validate()에서 처리함
@@ -250,9 +285,14 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     # write_only=True => 요청에서만 사용가능. 응답에는 포함되지 않음.
     # write_only=True일때의 요청(Request): 클라이언트 -> 서버로 데이터를 보낼 때 사용 가능 (request body로는 이 데이터를 보낼 수 있음)
     # write_only=True일때의 응답(Response): 서버 -> 클라이언트로 데이터를 보낼 때 이 데이터는 자동으로 제외됨 (response body로는 이 데이터가 오지 않음)
+    # 만약 write_only=True를 명시적으로 써주지 않으면 자동으로 response로도 이 데이터가 전송된다. 
     # 즉, 해시 변환 안 된 비밀번호(평문 비밀번호)는 서버로 보낼 수만 있고 서버가 클라이언트에게 다시 돌려주는 일은 없다.
     password = serializers.CharField(
-        write_only=True, min_length=8, max_length=16, trim_whitespace=True,
+        write_only=True,
+        min_length=8,
+        max_length=16,
+        trim_whitespace=True,
+        style={"input_type": "password"},  # style={"input_type": "password"} => 브라우저에서 입력한 값이 ****** 으로 가려짐
 
         # 여기 에러메시지 부터는 api 명세서의 response body에 반영 안함
         error_messages={
@@ -261,8 +301,13 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
             "blank": "비밀번호를 입력해주세요.",
         },
     )
+    
     password2 = serializers.CharField(
-        write_only=True, min_length=8, max_length=16, trim_whitespace=True,
+        write_only=True,
+        min_length=8,
+        max_length=16,
+        trim_whitespace=True,
+        style={"input_type": "password"},
         error_messages={
             "min_length": "비밀번호 확인은 최소 8자 이상이어야 합니다.",
             "max_length": "비밀번호 확인은 최대 16자 이하이어야 합니다.",
@@ -275,7 +320,7 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     
     # 커스텀 필드
     # 얘네들도 굳이 response로 받을 필요가 없기 때문에 write_only
-    # required=False: request body에 토큰 관련 필드가 없어도 오류가 발생하지 않음 
+    # required=False: request body에 토큰 관련 필드가 없어도 오류가 발생하지 않음 -> 명시적으로 적지 않으면 기본값은 required=True이다.
     # allow_blank=True: 빈 문자열 허용
     # => 필드가 없어도 되고 있어도 빈 문자열 허용 (예: {"id_check_token": ""} -> 통과)
     # => 여기서는 일단 통과시켰다가 밑에 validate()에서 제대로 검사한다.
@@ -291,11 +336,22 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     # 따라서 명세서 response body의 응답 예시에 반영해야하지만 안할 예정이다.
     user_id = serializers.CharField(
         max_length=50,
+        trim_whitespace=True,
+        write_only=True,
+        allow_blank=False,
         validators=[UniqueValidator(queryset=User.objects.all(), message="이미 사용 중인 아이디입니다.")],
+        error_messages={"blank": "아이디를 입력해주세요."},
     )
     email = serializers.EmailField(
         max_length=150,
+        trim_whitespace=True,
+        write_only=True,
+        allow_blank=False,
         validators=[UniqueValidator(queryset=User.objects.all(), message="이미 사용 중인 이메일입니다.")],
+        error_messages={
+            "invalid": "이메일 형식이 올바르지 않습니다.",
+            "blank": "이메일을 입력해주세요.",
+        },
     )
 
     class Meta:
@@ -493,7 +549,7 @@ class RegisterResponseSerializer(serializers.ModelSerializer):
 
     # 커스텀 필드
     # read_only=True: 서버에서 응답(Response)으로만 사용되는 읽기 전용 옵션. 서버 -> 클라이언트 방향 단방향 데이터
-    message = serializers.CharField(read_only=True)
+    message = serializers.CharField(read_only=True, allow_blank=True)
 
     class Meta:
         model = User
@@ -510,11 +566,29 @@ class RegisterResponseSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────
 
 class LoginRequestSerializer(serializers.Serializer):
-    user_id = serializers.CharField(max_length=50, trim_whitespace=True)
-    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    user_id = serializers.CharField(
+        max_length=50,          
+        trim_whitespace=True,   
+        write_only=True,        
+        allow_blank=False,      
+        error_messages={
+            "blank": "아이디를 입력해주세요.",
+            "max_length": "아이디는 최대 50자까지 입력 가능합니다."
+        }
+    )
+
+    password = serializers.CharField(
+        write_only=True,        
+        trim_whitespace=True,   
+        style={"input_type": "password"},  
+        allow_blank=False,      
+        error_messages={
+            "blank": "비밀번호를 입력해주세요."
+        }
+    )
 
     default_error_messages = {
-        "invalid_credentials": "아이디 or 비밀번호가 일치하지 않습니다.",
+        "invalid_credentials": "아이디 또는 비밀번호가 일치하지 않습니다.",
     }
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
@@ -530,9 +604,9 @@ class LoginRequestSerializer(serializers.Serializer):
         if not check_password(pw, user.password_hash):
             raise serializers.ValidationError({"message": self.error_messages["invalid_credentials"]})
 
-        # 3) 성공 시: 뷰에서 쓰도록 user만 남기고 password는 제거
+        # 3) 성공 시: 뷰에서 쓰도록 user만 남기고 민감 데이터인 password는 제거
         attrs["user"] = user
-        attrs.pop("password", None)
+        attrs.pop("password", None) 
         return attrs
 
 
@@ -541,41 +615,317 @@ class LoginRequestSerializer(serializers.Serializer):
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────
 class LoginResponseSerializer(serializers.Serializer):
-    access = serializers.CharField()  # JWT Access Token
-    role = serializers.ChoiceField(choices=["USER", "ADMIN", "SUPER_ADMIN"])
-    user_seq = serializers.IntegerField()
-    user_id = serializers.CharField()
-    message = serializers.CharField()
+    # JWT는 반드시 비어있지 않아야 함
+    access = serializers.CharField(read_only=True, allow_blank=False)
+
+    # 서버가 정한 역할만 내려줌(입력 받지 않음)
+    role = serializers.ChoiceField(choices=["USER", "ADMIN", "SUPER_ADMIN"], read_only=True)
+
+    user_seq = serializers.IntegerField(min_value=1, read_only=True)   # PK -> 1 이상
+    user_id = serializers.CharField(max_length=50, read_only=True)
+    message = serializers.CharField(read_only=True, allow_blank=True)
 
 
 # ─────────────────────────────────────────
 # 9. 엑세스 토큰 갱신 - response 시리얼라이저
+# 수행 기능: 직렬화
 # ─────────────────────────────────────────
 class TokenRefreshResponseSerializer(serializers.Serializer):
-    access = serializers.CharField(required=False)   # 200일 때만 포함
-    message = serializers.CharField(required=False)  # 401일 때만 포함
+    # 200 OK일 때만 포함. 포함되면 공백 불가
+    access = serializers.CharField(required=False, read_only=True, allow_blank=False)
 
-    def validate(self, attrs):
-        # access나 message 둘 중 하나는 반드시 존재
-        if "access" not in attrs and "message" not in attrs:
-            raise serializers.ValidationError("access 또는 message 중 하나는 포함되어야 합니다.")
-        # (선택) access 공백 금지
-        if "access" in attrs and not str(attrs["access"]).strip():
-            raise serializers.ValidationError({"access": "공백은 허용되지 않습니다."})
-        return attrs
-
-    def to_representation(self, instance):
-        # 전달된 키만 깔끔히 직렬화
-        rep = {}
-        if "access" in instance:
-            rep["access"] = instance["access"]
-        if "message" in instance:
-            rep["message"] = instance["message"]
-        return rep
+    # 401 등 에러 케이스에서만 포함 가능
+    message = serializers.CharField(required=False, read_only=True, allow_blank=True)
 
 
 # ─────────────────────────────────────────
 # 10. 로그아웃 - response 시리얼라이저
+# 수행 기능: 직렬화
 # ─────────────────────────────────────────
 class LogoutResponseSerializer(serializers.Serializer):
-    message = serializers.CharField()
+    message = serializers.CharField(read_only=True, allow_blank=True)
+
+
+# ─────────────────────────────────────────────────────────
+# 11. 아이디 찾기 - request 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크
+# ─────────────────────────────────────────────────────────
+class FindIdRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(
+        max_length=150,
+        trim_whitespace=True, 
+        write_only=True,       
+        allow_blank=False,     
+        error_messages={
+            "invalid": "이메일 형식이 올바르지 않습니다.", 
+            "blank": "이메일을 입력해주세요."             
+        },
+    )
+
+    name = serializers.CharField(
+        max_length=100,
+        trim_whitespace=True,
+        write_only=True,       
+        allow_blank=False,     
+        error_messages={
+            "blank": "이름을 입력해주세요." 
+        }
+    )
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        email = attrs["email"]
+        name = attrs["name"]
+
+        # User 테이블에서 email과 user_name이 모두 일치하는 사용자 1명을 찾는다.
+        user = User.objects.filter(email=email, user_name=name).only("user_id", "user_seq").first() # 성능 최적화를 위해 user_id, user_seq 두 컬럼만 SELECT
+        if not user:
+            raise NotFound(detail={"message": "가입되지 않은 사용자입니다."})
+
+        attrs["user"] = user
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────
+# 12. 아이디 찾기 - response 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+class FindIdResponseSerializer(serializers.Serializer):
+    user_id = serializers.CharField(
+        max_length=50,
+        required=False,      # 성공(200)일 때만 응답에 포함
+        read_only=True,   
+        allow_blank=False
+    )
+
+    message = serializers.CharField(
+        required=False,      # 실패 시만 포함
+        read_only=True,
+        allow_blank=True   
+    )
+
+
+# ─────────────────────────────────────────────────────────
+# 13. 비밀번호 찾기 - requset 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크
+# ─────────────────────────────────────────────────────────
+class FindPasswordRequestSerializer(serializers.Serializer):
+    user_id = serializers.CharField(
+        max_length=50,
+        trim_whitespace=True,
+        write_only=True,
+        allow_blank=False
+    )
+
+    default_error_messages = {
+        "not_found": "가입되지 않은 사용자입니다.",
+    }
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        uid = attrs["user_id"]
+
+        user = (
+            User.objects.filter(user_id=uid)        # User 테이블에서 user_id가 uid와 동일한 사용자를 조회
+            .only("user_seq", "user_id", "email")   # SQL SELECT 쿼리에서 이 세 컬럼만 가져오도록 제한
+            .first()                                # 조건을 만족하는 첫 번째 객체를 반환 -> 없으면 None 반환
+        )
+
+        # 조회 결과가 없다면 NotFound 예외 발생 -> HTTP 404 응답 반환
+        if not user:
+            raise NotFound(detail={"message": self.error_messages["not_found"]})
+
+        attrs["user"] = user
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────
+# 14. 비밀번호 찾기 - response 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+class FindPasswordResponseSerializer(serializers.Serializer):
+    message = serializers.CharField(allow_blank=True, read_only=True)
+
+
+# ─────────────────────────────────────────────────────────
+# 15. 비밀번호 변경 - request 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크
+# ─────────────────────────────────────────────────────────
+class ChangePasswordRequestSerializer(serializers.Serializer):
+    # style={"input_type": "password"} => 브라우저에서 입력한 값이 ****** 으로 가려짐
+    current_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    new_password_confirm = serializers.CharField(write_only=True, style={"input_type": "password"})
+
+    default_error_messages = {
+        "auth_required": "로그인이 필요합니다.",
+        "mismatch_current": "현재 비밀번호가 일치하지 않습니다.",
+        "mismatch_confirm": "새 비밀번호와 새 비밀번호 확인이 일치하지 않습니다.",
+        "same_password": "새 비밀번호가 현재 비밀번호와 동일할 수 없습니다.",
+    }
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        user: User | None = self.context.get("user")
+        if not user:
+            raise serializers.ValidationError({"message": self.error_messages["auth_required"]})
+
+        curr = attrs["current_password"]
+        new = attrs["new_password"]
+        new_cfm = attrs["new_password_confirm"]
+
+        # 1) 현재 비밀번호 확인
+        if not check_password(curr, user.password_hash):
+            raise serializers.ValidationError({"message": self.error_messages["mismatch_current"]})
+
+        # 2) 새 비밀번호 확인 일치
+        if new != new_cfm:
+            raise serializers.ValidationError({"message": self.error_messages["mismatch_confirm"]})
+
+        # 3) 새 비밀번호가 현재와 동일 금지
+        if curr == new:
+            raise serializers.ValidationError({"message": self.error_messages["same_password"]})
+        
+        attrs["user"] = user  # 뷰에서 저장 시 재조회 없이 사용
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────
+# 16. 비밀번호 변경 - response 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+class ChangePasswordResponseSerializer(serializers.Serializer):
+    message = serializers.CharField(allow_blank=True, read_only=True)
+
+
+# ─────────────────────────────────────────────────────────
+# 17. 관리자 권한 부여(승격) - request 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크
+# ─────────────────────────────────────────────────────────
+class AdminPromoteRequestSerializer(serializers.Serializer):
+    user_seq = serializers.IntegerField(min_value=1, write_only=True)
+
+    default_error_messages = {
+        "bad_request": "잘못된 요청입니다.",                 # 400
+        "forbidden": "슈퍼 관리자가 아닙니다.",               # 403
+    }
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+
+        # 1. 요청자(actor) 확인
+        actor: User | None = self.context.get("user")
+
+        # 요청자 인증 실패 -> 400 반환
+        if not actor:
+            raise serializers.ValidationError({"message": self.error_messages["bad_request"]})
+
+        # 2. 요청자가 SUPER_ADMIN(2)인지 확인
+        actor_level = getattr(getattr(actor, "grade_code", None), "grade_code", 0)
+        if actor_level != 2:  
+            raise PermissionDenied(detail={"message": self.error_messages["forbidden"]})
+
+        # 3. 승격 대상 사용자(target) 조회
+        target = User.objects.select_related("grade_code").filter(user_seq=attrs["user_seq"]).first()
+        if not target:
+            raise serializers.ValidationError({"message": self.error_messages["bad_request"]})
+
+        # 4. 대상 사용자가 이미 관리자거나 SUPER_ADMIN이면 승격 불가
+        target_level = getattr(getattr(target, "grade_code", None), "grade_code", 0)
+        if target_level >= 1:
+            raise serializers.ValidationError({"message": self.error_messages["bad_request"]})
+
+        # 5. 뷰에서 바로 사용 가능하도록 객체를 attrs에 넣어서 반환
+        attrs["actor"] = actor
+        attrs["target_user"] = target
+
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────
+# 18. 관리자 권한 부여(승격) - response 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+class AdminPromoteResponseSerializer(serializers.Serializer):
+    user_seq = serializers.IntegerField(min_value=1, read_only=True)
+    admin_level = serializers.ChoiceField(choices=["ADMIN"], read_only=True)
+    granted_at = serializers.DateTimeField(
+        format="%Y-%m-%dT%H:%M:%S%z",
+        read_only=True,
+    )
+    acted_seq = serializers.IntegerField(min_value=1, read_only=True)
+    message = serializers.CharField(allow_blank=True, read_only=True)
+
+
+
+# ─────────────────────────────────────────────────────────
+# 19. 관리자 권한 해제(강등) - request 시리얼라이저
+# 수행 기능: 역직렬화 + 유효성 체크
+# ─────────────────────────────────────────────────────────
+class AdminDemoteRequestSerializer(serializers.Serializer):
+    user_seq = serializers.IntegerField(min_value=1, write_only=True)
+
+    default_error_messages = {
+        "bad_request": "잘못된 요청입니다.",          # 400
+        "forbidden": "슈퍼 관리자가 아닙니다.",        # 403
+    }
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+
+        # 1. 요청자(actor) 확인
+        actor: User | None = self.context.get("user")
+        if not actor:
+            raise serializers.ValidationError({"message": self.error_messages["bad_request"]})
+
+        # 2. 요청자가 SUPER_ADMIN인지 확인
+        actor_level = getattr(getattr(actor, "grade_code", None), "grade_code", 0)
+        if actor_level != 2:  # 2 = SUPER_ADMIN
+            raise PermissionDenied(detail={"message": self.error_messages["forbidden"]})
+
+        # 3. 강등 대상 사용자(target) 조회
+        target = User.objects.select_related("grade_code").filter(user_seq=attrs["user_seq"]).first()
+        if not target:
+            raise serializers.ValidationError({"message": self.error_messages["bad_request"]})
+
+        # 4. 강등 대상자의 현재 등급 확인   
+        target_level = getattr(getattr(target, "grade_code", None), "grade_code", 0)
+        # 강등 당하는 API는 ADMIN(1)만 가능. SUPER_ADMIN(2) 또는 일반 유저(0)는 강등 당할 수 없음
+        if target_level != 1:
+            raise serializers.ValidationError({"message": self.error_messages["bad_request"]})
+
+        # 5. 뷰에서 바로 사용할 객체를 attrs에 주입
+        attrs["actor"] = actor
+        attrs["target_user"] = target
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────
+# 20. 관리자 권한 해제(강등) - response 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+class AdminDemoteResponseSerializer(serializers.Serializer):
+    user_seq = serializers.IntegerField(min_value=1, read_only=True)
+    demoted_at = serializers.DateTimeField(
+        format="%Y-%m-%dT%H:%M:%S%z",
+        read_only=True
+    )
+    acted_seq = serializers.IntegerField(min_value=1, read_only=True)
+    message = serializers.CharField(allow_blank=True, read_only=True)
+
+
+
+# ─────────────────────────────────────────────────────────
+# 21. 회원 목록 조회 - response 전용 시리얼라이저
+# 수행 기능: 직렬화
+# ─────────────────────────────────────────────────────────
+
+class UserListItemSerializer(serializers.Serializer):
+    user_seq = serializers.IntegerField(min_value=1, read_only=True)
+    user_id = serializers.CharField(max_length=50, read_only=True)
+    user_name = serializers.CharField(max_length=100, read_only=True)
+    grade_code = serializers.ChoiceField(choices=[0, 1, 2], read_only=True)
+    grade_name = serializers.CharField(max_length=20, read_only=True)
+
+class UserListResponseSerializer(serializers.Serializer):
+    items = UserListItemSerializer(many=True, read_only=True)  # many=True: 이 필드는 리스트(여러 객체)를 직렬화해야 한다는 뜻 -> 명시적으로 적지않으면 기본값: many=False
+    page = serializers.IntegerField(min_value=1, read_only=True)
+    size = serializers.IntegerField(min_value=1, read_only=True)
+    total_count = serializers.IntegerField(min_value=0, read_only=True)
+    total_pages = serializers.IntegerField(min_value=0, read_only=True)
+    message = serializers.CharField(allow_blank=True, read_only=True)
