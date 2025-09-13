@@ -1,5 +1,5 @@
 # <DRF에서 시리얼라이저(Serializer)의 역할>
-# (1) JSON <-> 파이썬 객체 변환: 데이터(모델 객체 = 클래스의 인스턴스)를 JSON 형식으로 변환하거나, 반대로 JSON -> 모델 객체로 변환하는 도구 => 쉽게말해, 백엔드와 프론트엔드가 서로 통신할 때 데이터 형식을 맞춰주는 통역사 같은 역할
+# (1) JSON <-> 파이썬 객체 변환: 데이터(모델 객체 = 클래스의 인스턴스 =  DB 테이블의 한 행)를 JSON 형식으로 변환하거나, 반대로 JSON -> 모델 객체로 변환하는 도구 => 쉽게말해, 백엔드와 프론트엔드가 서로 통신할 때 데이터 형식을 맞춰주는 통역사 같은 역할
 # 예를들어 <User: id=1, username='testuser', email='test@example.com'> <- 이 모델 객체(클래스 인스턴스)를 
 # { "id": 1, "username": "testuser", "email": "test@example.com" } <- 이러한 JSON으로 바꿔준다.
 # (2) 데이터 검증 (Validation): 프론트엔드에서 보낸 요청 데이터(JSON)가 유효한 값인지 확인 (예: 이메일 형식 확인, 비밀번호 최소 길이 검사, 중복 아이디 체크 등)
@@ -29,6 +29,8 @@
 # (1) 클라이언트에서 들어온 HTTP 요청(GET, POST, PUT, DELETE 등)을 수신
 # (2) 시리얼라이저 호출
 # (3) 복잡한 비즈니스 로직 수행(목적없는 단순 기계적 CRUD가 아닌 서비스 정책, 특정 조건 등이 반영된 CRUD, 외부 API 호출 등)
+# 만약 프로젝트 규모가 커지거나 비즈니스 로직이 매우 복잡해질 경우, 서비스 계층(Service Layer)을 새로 만들어서 비즈니스 로직을 여기서 전부 처리하기도 한다. 
+# 그렇게 되면 뷰(views.py)는 HTTP 통신에 집중할 수 있고, 서비스(services.py)는 복잡한 로직에만 집중할 수 있게된다.
 
 # <요청 시리얼라이저 vs 응답 시리얼라이저>
 # 1. reqeust 시리얼라이저
@@ -54,8 +56,10 @@
 
 # 2. POST/PUT (등록/수정): 프론트엔드 -> JSON -> 모델 -> DB
 # (1) 프론트엔드가 JSON을 백엔드에 보낸다.
-# (2) 시리얼라이저가 JSON을 받아 역직렬화를 통해 모델 객체로 변환
+# (2) 시리얼라이저가 JSON을 받아 역직렬화를 통해 DB가 이해할 수 있는 데이터 형태인 모델 객체로 변환
 # (3) 그리고 이 모델 객체가 DB에 저장됨
+
+# DELETE는 삭제만하기 때문에 직렬화/역직렬화 과정을 거치지 않는다.
 # ─────────────────────────────────────────────────────────────────────────────
 
 import re
@@ -70,6 +74,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import NotFound
 
 # 데이터를 안전하게 서명(Signing)하고 검증(Verification)하기 위한 유틸리티를 제공
+# 서버에서 문자열을 암호화 + 서명하여 안전하게 전달할 수 있도록 도와줌
 from django.core import signing
 
 # BadSignature: signing.loads()가 실행될 때, 토큰이 위변조되었거나 잘못된 값일 경우 발생하는 예외를 처리하기 위해 사용
@@ -94,14 +99,14 @@ from .models import UserLevel, User
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. 아이디 체크 - request 전용 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
-# 역직렬화: request body의 JSON을 파이썬 객체로 변환
+# 역직렬화: request body에 들어온 JSON을 파이썬 객체로 변환
 # ─────────────────────────────────────────────────────────────────────────────
 
 # <ModelSerializer vs Serializer>
 # 1. ModelSerializer: 모델(models.py)과 연결되어있는 시리얼라이저를 만들 때 사용
 # (1) 모델 필드 자동 생성 => fields = [...]에 사용할 필드 집어넣기만 하면 끝
 # (2) CRUD 기본 동작 자동 구현 => create(), update() 등의 함수 기본 제공
-# (3) 모델 유효성 검증 (max_length, unique 등) => 자동 반영
+# (3) 모델 유효성 검증 => models.py에 정의된 필드 옵션 max_length, unique 등 자동 반영
 # (4) ORM 객체(모델 객체 <=> DB 테이블의 한 행(row)을 파이썬 객체로 표현한 것) <-> JSON 자동 변환
 # => ORM(Object Relational Mapping): 파이썬 클래스와 데이터베이스 테이블을 1:1로 연결해주는 기술
 # => ORM을 사용하면 SQL문을 직접 작성하지 않고 파이썬 객체를 이용해 DB를 제어할 수 있다.
@@ -110,7 +115,7 @@ from .models import UserLevel, User
 # 2. Serializer: 모델(models.py)과 연결되지 않은 시리얼라이저를 만들 때 사용
 # (1) 모델 필드 자동 생성 불가능 => 직접 선언해야 됨
 # (2) CRUD 기본 동작 자동 구현 불가능 => create(), update() 등의 함수를 직접 만들어야됨
-# (3) 모델 유효성 검증 (max_length, unique 등) => 직접 코딩해야 함
+# (3) 모델 유효성 검증 => 각각의 필드에 max_length, unique 등을 직접 코딩해야 함
 # (4) ORM 객체 <-> JSON 자동 변환 => 가능하지만 수동 선언 필요
 class IdPrecheckRequestSerializer(serializers.Serializer):
 
@@ -141,9 +146,9 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
         # 뷰에서 처리하는 메시지 -> 성공 메시지/안내 메시지 중심
         # 일반적으로 RequestSerializer에서의 메시지는 최종사용자(유저)를 위한거고 ResponseSerializer에서의 메시지는 유저 + 개발자를 위한것이다.
         # 여기서의 에러 메시지는 사용자에게 보여주기 위한 메시지이다. -> 하지만 사용자에게 보여줄지 말지 여부를 뷰에서 결정할 수 있다.
-        # api 명세서의 response body에서 내려주는 message 또한 사용자에게 보여주기 위한 역할이다.
-        # 명세서의 message 필드는 프론트에서 직접 관리 할 수도 있고 백엔드에서 메시지를 만들어서 보낸다음 프론트는 받아서 출력하게만 할 수도 있는데 이 프로젝트에선 백엔드에서 처리한 후 보낼 예정이다.
-        # 그리고 만약 모든 사용자 메시지를 프론트엔드에서 직접 관리하기로 정했다면 API 명세서 response body에서 message 필드는 제외하는 것이 좋다.
+        # 명세서의 message 필드는 프론트에서 직접 관리 할 수도 있고 백엔드에서 메시지를 만들어서 보낸다음 프론트는 받아서 출력하게만 할 수도 있는데 이 프로젝트에선 모든 메시지를 백엔드에서 처리한 후 보낼 예정이다.
+        # 메시지가 개발용도가 아니라 사용자에게 보여주기 위한 목적이라면 명세서의 response body의 message 필드에 추가해야한다.
+        # 그리고 만약 모든 메시지를 프론트엔드에서 직접 관리하기로 정했다면 API 명세서 response body에서 message 필드는 제외해야한다.
         # 여기서의 에러 메시지는 시리얼라이저 검증 후 serializer.errors라는 딕셔너리 형태로 뷰(View)까지 전달된다.
         # 그리고 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)] 일때의 response body는 이미 여기서 로직구현(RegexField로 형식 체크, validate_user_id()로 중복 체크) 후 판단까지 했으므로
         # 뷰에서는 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)]는 포맷구성만 하면되고  
@@ -154,37 +159,45 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
         }
     )
 
+    # <validate_<필드명>() vs validate() 함수 차이>
+    # 1. validate_<필드명>() => 이 한개의 필드만 개별적으로 검사 수행
+    # 2. validate() => 모든 필드의 관계를 함께 검증
+    # => 둘 다 명시적으로 호출하지 않아도 DRF가 자동으로 호출해주는 메서드지만, 아래처럼 오버라이드해서 커스터마이징 할 수 있다.
+
     # 2. 아이디 중복 검사 + 개발자가 임의로 정한 에러 코드 문자열 (code="duplicate")
     # validate_<필드명> 형식으로 메서드를 작성하면, DRF가 자동으로 그 필드 값이 유효한지 추가 검증을 수행
-    # 뷰(View) -> serializer = IdPrecheckRequestSerializer(data=request.data) 시리얼라이저 인스턴스 생성 -> serializer.is_valid() 여기서 각 필드 기본 검증(RegexField 등) 수행하고, validate_user_id 함수도 자동 호출
+    # 호출 과정: 뷰(View) 실행 -> serializer = IdPrecheckRequestSerializer(data=request.data) 시리얼라이저 인스턴스 생성 -> serializer.is_valid() 여기서 각 필드 기본 검증(RegexField 등) 수행하고, validate_user_id 함수도 자동 호출
     def validate_user_id(self, value: str) -> str:
 
-        # exists() -> True/False 반환 -> 동일한 user_id가 존재하면 True 반환 후 아래 코드 실행
-        # 동일한 user_id가 없다면 False 반환 후 바로 return value
-        if User.objects.filter(user_id=value).exists():   
-
+        # 장고 ORM을 사용해 데이터베이스에서 특정 조건을 만족하는 레코드가 존재하는지 빠르게 확인
+        # User 모델에서 user_id 값이 value와 일치하는 행(Row) 들을 조회
+        # exists() -> True/False 반환 -> 동일한 user_id가 존재하면 True 반환 후 에러 코드 실행. 동일한 user_id가 없다면 False 반환 후 바로 return value
+        if User.objects.filter(user_id=value).exists():   # SELECT * FROM USER WHERE user_id = '입력값';
+            
+            # <실패 시>
             # 중복된 아이디가 있으면 유효성 검증 실패를 알리는 예외를 발생시킴
             # 첫 번째 인자: "이미 사용 중인 아이디입니다." -> 사용자에게 보여줄 에러 메시지 -> 이 또한 뷰에서 최종적으로 보여줄지말지 결정
             # 두 번째 인자: code="duplicate" -> 에러 코드 문자열을 함께 제공
-            # 실패 시 -> raise로 함수가 즉시 중단되고 serializer.errors에 에러 코드 문자열(duplicate)을 담아서 뷰로 전달 
+            # raise로 함수가 즉시 중단되고 serializer.errors에 에러 코드 문자열(duplicate)을 담아서 뷰로 전달 
             # 뷰가 받게 되는 것 => serializer.errors = { "user_id":[ { "message": "이미 사용 중인 아이디입니다.","code": "duplicate" }] }
             raise serializers.ValidationError("이미 사용 중인 아이디입니다.", code="duplicate")
         
+        # <성공 시>
         # 중복이 없으면 검증을 통과시키고 검증된 value(user_id)를 그대로 뷰로 반환
-        # 성공 시 -> return으로 반환된 user_id(value)가 serializer.validated_data에 저장되어 뷰로 전달됨
+        # 성공 시 -> return으로 반환된 user_id가 serializer.validated_data에 저장되어 뷰로 전달됨
         return value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. 아이디 체크 - response 전용 시리얼라이저
 # 수행 기능: 직렬화
-# 직렬화: 파이썬 객체를 response body의 JSON으로 변환
+# 직렬화: response body에 들어갈 데이터를 JSON으로 변환
 # ─────────────────────────────────────────────────────────────────────────────
 
 class UserIdInfoSerializer(serializers.Serializer):
     valid = serializers.BooleanField(read_only=True)
     status = serializers.ChoiceField(
-        choices=["available", "invalid", "taken"],
+        choices=["available", "invalid", "taken"], # ChoiceField 클래스의 choices 옵션: "available", "invalid", "taken" 셋 중 하나여야만 유효성을 통과 -> 다른 문자열이 들어오면 ValidationError 발생
         read_only=True,
     )
 
@@ -321,9 +334,9 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
     # 커스텀 필드
     # 얘네들도 굳이 response로 받을 필요가 없기 때문에 write_only
     # required=False: request body에 토큰 관련 필드가 없어도 오류가 발생하지 않음 -> 명시적으로 적지 않으면 기본값은 required=True이다.
-    # allow_blank=True: 빈 문자열 허용
+    # allow_blank=True: 빈 문자열 허용 -> 명시적으로 적지 않으면 기본값은 allow_blank=False이다.
     # => 필드가 없어도 되고 있어도 빈 문자열 허용 (예: {"id_check_token": ""} -> 통과)
-    # => 여기서는 일단 통과시켰다가 밑에 validate()에서 제대로 검사한다.
+    # => 여기서는 일단 통과시켰다가 밑에 validate()에서 헬퍼함수를 만들어 제대로 검사한다.
     id_check_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
     email_check_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
@@ -418,6 +431,7 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
         return False             # 통과 시 False 반환
 
     # (5) 아이디 중복확인/이메일 중복확인 토큰이 유효한지 확인하기 위한 함수
+    # 필드에서 대충 통과시킨 체크 토큰에 대한 유효성 검사를 여기서 제대로 수행
     def _verify_precheck_token(self, token: str, kind: str, subject: str, max_age: int = 600) -> bool:
         # token: 프론트엔드에서 전달된 사전 중복검사 토큰 문자열
         # kind: 'user_id' 또는 'email' -> 토큰이 어떤 검증용인지 구분
@@ -428,15 +442,28 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
         if not token:
             return False
         
-        # 토큰 복호화(암호문 -> 평문) 시도
-        # signing.loads(): 서버가 signing.dumps()로 암호화한 토큰을 다시 원래 데이터로 되돌림
-        # Payload (페이로드): 복호화가 끝난 후 꺼내는 실제 핵심 데이터
-        # 복호화 후 나온 딕셔너리(signing.loads()함수의 반환 값) => 예: payload = {"kind": "user_id","sub": "test123"}
+        # <전체 흐름>
+        # 1. 프론트엔드가 아이디 "hong123" 입력 후 중복검사 API 호출
+        # 2. 서버가 DB에서 찾아보고 사용가능 시 토큰을 signing.dumps()로 암호화하여 발급 -> signing.dumps()는 뷰에서 개발자가 직접 호출해야 됨
+        # 3. 서버가 응답으로 프론트에게 { id_check_token: "암호화된문자열" } 반환
+        # 4. 프론트는 최종 회원가입 시 서버에게 [아이디, 이메일, 암호화된 토큰, ...] 함께 전송
+        # 5. 서버는 암호화된 토큰을 signing.loads()로 복호화하여 진짜인지 확인
+        # 6. 검증 통과 시 회원가입 진행, 실패 시 에러 반환
+
+        # <서버가 토큰을 암호화 하는 이유>
+        # 만약 암호화를 하지 않고 프론트로 토큰을 보내주면 해커가 토큰을 받아서 직접 토큰을 위조하거나/만든 후 서버로 보낼 수 있기 때문에
+        # 서버 입장에선 이 토큰이 진짜 자기가 발급한 토큰인지 만들어진 토큰인지 알 길이 없다. 
+
+        # <토큰 복호화(암호문 -> 평문) 시도>
+        # Payload (페이로드): 전송되는 전체 데이터 중 핵심 실질 정보 부분
+        # 여기서의 payload: signing.loads()를 사용하여 복호화된 평문 데이터
+        # signing.loads(): 서버가 signing.dumps()로 암호화한 토큰을 다시 원래 데이터로 되돌리는 복호화 함수
+        # 복호화 후 나온 payload 값 => 예: payload = {"kind": "user_id","sub": "test123"}
         try:
             payload = signing.loads(
-                token,
+                token,                  # token은 암호화된 데이터, payload는 평문 데이터
                 salt=f"precheck:{kind}",
-                max_age=max_age,  # 만료 시 SignatureExpired
+                max_age=max_age,        # 만료 시 SignatureExpired
             )
 
         # 토큰 복호화 실패 시 False 반환

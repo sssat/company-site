@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     # 서드파티(3rd-party) => 서드파티는 Django가 만든 게 아니라 외부 커뮤니티/회사에서 만든 패키지
     "rest_framework",   # API 서버 만들 때 쓰는 도구
     "corsheaders",      # CORS(다른 출처(origin)에서 오는 요청을 허용할지/막을지 정하는 웹브라우저의 보안 규칙) 헤더를 추가/관리하는 미들웨어를 제공 -> 프론트(React, http://localhost:5173)랑 백엔드(Django, http://localhost:8000)가 포트가 달라서 서로 통신을 못하는데 corsheaders 얘를 쓰면 허용해줌.
+    "rest_framework_simplejwt.token_blacklist",  # 블랙리스트(JWT) 앱 추가
 
     # 로컬 앱 (내가 만든 앱)
     "accounts",   # 기본 모델(django.contrib.auth)만으로도 로그인/회원가입/비번변경 같은 건 구현할 수 있지만 커스터마이징 하기 위해 사용
