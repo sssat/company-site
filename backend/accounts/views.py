@@ -42,15 +42,27 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import Any, Dict, Optional, List
-import re
+from django.contrib.auth.hashers import make_password
 from django.core import signing
 from .models import User, UserLevel
 
 # Django 프로젝트의 설정값을 코드에서 사용하기 위해 가져옴
 from django.conf import settings
 
-# JSON을 파싱하다가 실패했을 때 발생하는 표준 예외 클래스
+# JSON을 파싱(의미 있는 구조화된 데이터로 해석하는 과정)하다가 실패했을 때 발생하는 표준 예외 클래스
 from rest_framework.exceptions import ParseError
+
+from django.db import transaction, IntegrityError
+from rest_framework_simplejwt.exceptions import TokenError
+import math
+from rest_framework.exceptions import ParseError, UnsupportedMediaType, ValidationError, NotFound, PermissionDenied
+
+# 비밀번호 변경 시각, 관리자 권한 부여 시각 등을 기록할 때 timezone.now() 사용
+from django.utils import timezone
+
+# Django에서 이메일을 발송하기 위한 함수
+# SMTP 설정을 기반으로 이메일을 보낼 수 있다.
+from django.core.mail import send_mail
 
 # 클래스형 뷰(CBV)를 만들기 위한 DRF의 기본 클래스
 # APIView를 상속받아 get(), post(), put(), delete() 등 HTTP 메서드별 함수를 정의할 수 있다.
@@ -201,6 +213,72 @@ def _first_error_message(errs: Dict[str, List[Dict[str, str]]]) -> str:
 
 
 
+# 1. 사용자 등급코드를 문자열 역할명으로 변환
+# 0 -> 일반 유저(USER)  
+# 1 -> 관리자(ADMIN)
+# 2 -> 슈퍼 관리자(SUPER_ADMIN)
+def _role_name_from_user(user: User) -> str:
+    level_obj = getattr(user, "grade_code", None)
+    code = getattr(level_obj, "grade_code", 0)
+    if code == 2:
+        return "SUPER_ADMIN"
+    if code == 1:
+        return "ADMIN"
+    return "USER"
+
+
+# 2. JWT Refresh Token 만료시간을 쿠키 max_age(초 단위)로 환산
+# SimpleJWT에서 Refresh Token 만료시간은 datetime.timedelta 객체이다. 
+# 그런데 쿠키의 max_age는 초 단위의 정수값이어야 하므로 이를 변환해주기 위한 함수
+# None 반환 시 DRF 기본 동작(세션 쿠키)으로 동작
+def _get_refresh_cookie_max_age() -> Optional[int]:
+    lifetime = getattr(settings, "SIMPLE_JWT", {}).get("REFRESH_TOKEN_LIFETIME") if hasattr(settings, "SIMPLE_JWT") else None
+    if lifetime:
+        try:
+            return int(lifetime.total_seconds())
+        except Exception:
+            return None
+    return None
+
+
+# 3. Refresh Token을 HttpOnly 쿠키에 안전하게 저장
+# Refresh Token은 프론트엔드 JavaScript에서 접근하지 못하도록 반드시 HttpOnly 쿠키에 저장
+
+# 명세서 요구사항에 맞춰 아래 속성을 적용
+# httponly=True -> JS 접근 차단 (XSS 방어)
+# secure=True -> HTTPS 환경에서만 전송
+# samesite='Lax' -> CSRF 위험 완화
+# path="/api/auth/" -> 특정 경로에만 쿠키 전송
+def _set_refresh_cookie(resp: Response, refresh_token: str) -> None:
+    """명세: path=/api/auth/, HttpOnly, Secure, SameSite=Lax"""
+    resp.set_cookie(
+        key="refresh",
+        value=refresh_token,
+        path="/api/auth/",
+        httponly=True,
+        secure=True,
+        samesite="Lax",
+        max_age=_get_refresh_cookie_max_age(),
+    )
+
+
+# 4. Refresh Token 쿠키를 클라이언트에서 삭제
+# 로그아웃 시 브라우저에서 Refresh Token을 제거하기 위해 사용
+# path를 설정하지 않으면 동일 키의 다른 경로 쿠키가 남을 수 있어 반드시 명시
+def _delete_refresh_cookie(resp: Response) -> None:
+    resp.delete_cookie(key="refresh", path="/api/auth/")
+
+
+# 8. 이메일 발송 시 안전하게 실패 처리
+# 비밀번호 찾기(임시 비번 발송) 등에서 사용
+# SMTP 서버가 없거나 오류가 발생해도 서버가 죽지 않도록 try/except로 감싸 실패를 무시
+def _safe_send_mail(subject: str, message: str, to_email: str) -> None:
+    try:
+        send_mail(subject, message, getattr(settings, "DEFAULT_FROM_EMAIL", None), [to_email], fail_silently=True)
+    except Exception:
+        pass
+
+
 # ─────────────────────────────────────────────────────────
 # 1. 아이디 체크 - 클래스형 뷰
 # 수행 기능: user_id의 유효성 검사 + 결과를 JSON 형태로 반환
@@ -213,20 +291,27 @@ class IdPrecheckView(APIView):  # IdPrecheckView의 부모 클래스 APIView 상
 
     def post(self, request, *args, **kwargs):
 
-        # 400: 파싱/미디어타입 오류 -> 통일 메시지
+        # 1. 400: 파싱/미디어타입 오류
+        # Request 클래스에도 .data 프로퍼티가 있고, Serializer 클래스에도 .data 프로퍼티가 정의되어있다.
+        # Request.data는 HTTP Body를 파싱해 Python dict로 제공하고, Serializer.data는 Python 객체를 직렬화해 Python dict로 제공한다.
         try:
-            data = request.data  # 여기서 ParseError 가능
+            # DRF가 request body를 파싱해서 파이썬 dict로 만들어 data에 담음 -> 근데 이 순간 ParseError가 발생할 수 있음
+            data = request.data   # request.data = request body
         except ParseError:
-            return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
+            # 명세에 맞게 400과 통일 메시지를 반환
+            return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)  
 
-        # 400: 요청 바디 형태/키/타입 검증
-        if not isinstance(data, dict):
+        # 2. 400: request body의 형태/키/타입 검증
+        # 정상적인 request body는 dict 형태 여야 함 -> 만약 엉뚱한 타입이면 바로 400 
+        if not isinstance(data, dict):  
             return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
-        if "user_id" not in data or not isinstance(data.get("user_id"), str):
+        
+        # 필수 key인 "user_id"가 없거나, 타입이 문자열이 아니면 400
+        if "user_id" not in data or not isinstance(data.get("user_id"), str):  
             return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 아이디 체크 request 시리얼라이저 객체 생성
-        s = IdPrecheckRequestSerializer(data=request.data)   # request.data = request body
+        s = IdPrecheckRequestSerializer(data=data)   # 위에서 data = request.data 이미 정의함
 
         # <IdPrecheckRequestSerializer를 이용해 request body의 user_id 유효성 검증 수행>
         # is_valid(): Serializer 클래스에 기본적으로 정의되어있는 함수 => 이 함수는 완성형으로 존재하기 때문에 오버라이드 할 필요 없이 바로 쓰면된다.
@@ -239,7 +324,7 @@ class IdPrecheckView(APIView):  # IdPrecheckView의 부모 클래스 APIView 상
             user_id = s.validated_data["user_id"]   
 
             # _precheck_ok_response() 헬퍼 함수를 호출해 성공 응답 JSON을 생성
-            # serializer.data: 객체를 dict으로 변환
+            # Serializer.data: 객체를 dict으로 변환
             # IdPrecheckResponseSerializer(_precheck_ok_response("user_id", user_id)).data: 아이디체크 response 시리얼라이저의 인스턴스를 변수 없이 즉석에서 만들고 .data를 사용하여 딕셔너리를 얻음
             # 근데 _precheck_ok_response 헬퍼 함수에서 dict 형태로 반환하기 때문에 굳이 .data를 안써도 되지만, 이 dict가 올바른 응답 스키마를 따르고 있는지를 마지막으로 확인하기 위해 .data를 써준다.
             # Response 객체에서 이제 진짜로 JSON으로 변환됨
@@ -252,15 +337,18 @@ class IdPrecheckView(APIView):  # IdPrecheckView의 부모 클래스 APIView 상
         # s.errors에서 검증 실패 원인을 가져옴
         errs = s.errors
 
-        # _first_error_message(errs) 헬퍼함수로 첫 번째 에러 메시지만 간단히 추출
+        # _first_error_message(errs) 헬퍼함수로 첫 번째 key인 message만 간단히 추출
         msg = _first_error_message(errs)
 
-        # 첫 번째 에러 코드 확인
-        first_key = next(iter(errs))
+        # 두 번째 key인 code 확인
+        # first_key = "user_id"
+        # first_error = {"message": "이미 사용 중인 아이디입니다.", "code": "duplicate"}
+        # error_code = "duplicate"
+        first_key = next(iter(errs))  
         first_error = errs[first_key][0] if isinstance(errs[first_key], list) else errs[first_key]
         error_code = getattr(first_error, "code", "")
 
-        # "duplicate" 문자열이 s.errors에 포함되어 있다면 => "taken" -> 이미 사용 중인 아이디
+        # "duplicate" 문자열이 error_code에 포함되어 있다면 => "taken" -> 이미 사용 중인 아이디
         # 그렇지 않다면 => "invalid" -> 아이디 형식이 잘못됨
         status_str = "taken" if error_code == "duplicate" else "invalid"
 
@@ -290,7 +378,6 @@ class EmailPrecheckView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # 400: 요청 자체가 잘못된 경우만
         try:
             data = request.data
         except ParseError:
@@ -301,10 +388,8 @@ class EmailPrecheckView(APIView):
         if "email" not in data or not isinstance(data.get("email"), str):
             return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # (정상 흐름) 시리얼라이저 검증
         s = EmailPrecheckRequestSerializer(data=data)
 
-        # (1) 성공
         if s.is_valid():
             email = s.validated_data["email"]
             return Response(
@@ -312,7 +397,6 @@ class EmailPrecheckView(APIView):
                 status=status.HTTP_200_OK
             )
 
-        # (2) 실패(형식오류/허용 도메인 아님/중복)도 200으로
         errs = s.errors
         msg = _first_error_message(errs)
 
@@ -320,7 +404,6 @@ class EmailPrecheckView(APIView):
         first_error = errs[first_key][0] if isinstance(errs[first_key], list) else errs[first_key]
         error_code = getattr(first_error, "code", "")
 
-        # 중복이면 taken, 그 외(invalid, invalid_domain 등)는 invalid
         status_str = "taken" if error_code == "duplicate" else "invalid"
 
         payload = {
@@ -333,4 +416,568 @@ class EmailPrecheckView(APIView):
         )
 
 
+# ─────────────────────────────────────────────────────────
+# 3. 회원가입 - 클래스형 뷰
+# POST /api/auth/register/
+# ─────────────────────────────────────────────────────────
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
 
+    def post(self, request, *args, **kwargs):
+        # 1. 400: 파싱/미디어타입 오류
+        try:
+            data = request.data
+        except ParseError:
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. 유효성 검증
+        serializer = RegisterRequestSerializer(data=data)
+        if not serializer.is_valid():
+            return Response({"errors": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. 저장  
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+        except IntegrityError:
+            return Response(
+                {"errors": {"non_field_errors": ["중복 데이터로 인해 생성에 실패했습니다. 다시 시도해주세요."]}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 4. 201: 성공
+        res = RegisterResponseSerializer(user).data
+        return Response(res, status=status.HTTP_201_CREATED)
+
+
+# ─────────────────────────────────────────────────────────
+# 4. 로그인 - 클래스형 뷰
+#  POST /api/auth/login/
+# ─────────────────────────────────────────────────────────
+class LoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def _map_role(self, user) -> str:
+        level = getattr(user, "grade_code", None)
+        code = getattr(level, "grade_code", None)
+        if code == 2:
+            return "SUPER_ADMIN"
+        if code == 1:
+            return "ADMIN"
+        return "USER"
+
+    def post(self, request, *args, **kwargs):
+        # 1) 400: 파싱/미디어타입 오류
+        try:
+            data = request.data
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 2) 유효성 검증
+        serializer = LoginRequestSerializer(data=data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError as exc:
+            detail = exc.detail
+            if isinstance(detail, dict) and "message" in detail:
+                return Response({"message": detail["message"]},
+                                status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"errors": detail},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 3) 자격증명 성공 -> 토큰 발급
+        user = serializer.validated_data["user"]
+        refresh = RefreshToken.for_user(user)
+        access = str(refresh.access_token)
+
+        # 4) 응답 본문 (명세 예시와 동일 키만)
+        body = {
+            "access": access,
+            "user_seq": getattr(user, "user_seq"),
+            "user_id": getattr(user, "user_id"),
+            "role": self._map_role(user),
+        }
+
+        # 5) Refresh 토큰을 HttpOnly 쿠키로 설정
+        resp = Response(body, status=status.HTTP_200_OK)
+        resp.set_cookie(
+            key="refresh",
+            value=str(refresh),
+            max_age=int(refresh.lifetime.total_seconds()),
+            httponly=True,
+            secure=True,            # 배포 환경에선 True 유지
+            samesite="Strict",
+            path="/api/auth/",
+        )
+        return resp
+
+
+# ─────────────────────────────────────────────────────────
+# 5. 엑세스 토큰 갱신 - 클래스형 뷰
+# POST /api/auth/refresh/
+# ─────────────────────────────────────────────────────────
+class TokenRefreshView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # 1) 400: 파싱/미디어타입 오류
+        try:
+            _ = request.data  # 바디는 사용하지 않지만, 파서 오류를 유발시켜 통일 처리
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 2) 쿠키에서 refresh 추출
+        raw_refresh = request.COOKIES.get("refresh")
+        if not raw_refresh:
+            # 401: 리프레시 토큰 누락
+            res = TokenRefreshResponseSerializer({"message": "리프레시 토큰을 전달하세요."}).data
+            return Response(res, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 3) 리프레시 검증 -> 엑세스 재발급
+        try:
+            refresh = RefreshToken(raw_refresh)
+
+            # 블랙리스트 사용 시 검증
+            # simplejwt의 blacklist 앱이 설치되어 있으면 체크 가능
+            try:
+                refresh.check_blacklist()
+            except AttributeError:
+                pass  # 블랙리스트 미사용 환경
+
+            access = str(refresh.access_token)
+        except TokenError:
+            # 401: 만료/위변조/블랙리스트 등
+            res = TokenRefreshResponseSerializer(
+                {"message": "리프레시 토큰이 유효하지 않거나 만료되었습니다."}
+            ).data
+            return Response(res, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 4) 200: 성공(엑세스만 갱신)
+        res = TokenRefreshResponseSerializer({"access": access}).data
+        return Response(res, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────
+# 6. 로그아웃 - 클래스형 뷰
+# POST /api/auth/logout/
+# ─────────────────────────────────────────────────────────
+class LogoutView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # 1) 400: 파싱/미디어타입 오류
+        try:
+            _ = request.data  # 바디는 사용하지 않지만 파서 에러를 유발시켜 통일 처리
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 2) 리프레시 쿠키 읽기
+        raw_refresh = request.COOKIES.get("refresh")
+
+        # 3) 리프레시 블랙리스트 시도(있으면) + 쿠키 제거
+        resp = Response(LogoutResponseSerializer({"message": "로그아웃되었습니다."}).data,
+                        status=status.HTTP_200_OK)
+
+        # 쿠키 삭제
+        resp.delete_cookie("refresh", path="/api/auth/")
+
+        if not raw_refresh:
+            # 쿠키가 이미 없으면 그대로 200
+            return resp
+
+        # 4) 쿠키가 있으면 토큰 검증 및 블랙리스트
+        try:
+            refresh = RefreshToken(raw_refresh)
+            # blacklist 앱 사용 시 현재 토큰 블랙리스트 처리
+            try:
+                refresh.blacklist()  # blacklist 앱이 없으면 AttributeError 발생
+            except AttributeError:
+                pass
+        except TokenError:
+            # 위변조/만료 등이어도 쿠키만 제거하고 200 반환
+            return resp
+
+        return resp
+
+
+# ─────────────────────────────────────────────────────────
+# 7. 아이디 찾기 - 클래스형 뷰
+# POST /api/auth/find-id/
+# ─────────────────────────────────────────────────────────
+class FindIdView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # 파싱/미디어타입 오류 -> 400
+        try:
+            data = request.data
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 유효성 검증
+        serializer = FindIdRequestSerializer(data=data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except NotFound as nf:
+            detail = getattr(nf, "detail", {})
+            if isinstance(detail, dict) and "message" in detail:
+                return Response(detail, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "가입되지 않은 사용자입니다."},
+                            status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as exc:
+            # 필드 형식/누락 등
+            return Response({"errors": exc.detail},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 성공 응답 200
+        user = serializer.validated_data["user"]
+        res = FindIdResponseSerializer({"user_id": getattr(user, "user_id")}).data
+        return Response(res, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────
+# 8. 비밀번호 찾기 - 클래스형 뷰
+# POST /api/auth/find-password/
+# ─────────────────────────────────────────────────────────
+class FindPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    # 재설정 링크(프론트) 기본값을 settings에서 가져오되 없으면 폴백
+    def _reset_base_url(self) -> str:
+        # 예: settings.PASSWORD_RESET_URL = "https://your-frontend.com/reset-password"
+        return (
+            getattr(settings, "PASSWORD_RESET_URL", None)
+            or getattr(settings, "FRONTEND_RESET_URL", None)
+            or "/reset-password"
+        )
+
+    def post(self, request, *args, **kwargs):
+        # 파싱/미디어타입 오류 -> 400
+        try:
+            data = request.data
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 유효성 검증 (존재하지 않으면 시리얼라이저에서 NotFound)
+        serializer = FindPasswordRequestSerializer(data=data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except NotFound as nf:
+            detail = getattr(nf, "detail", {})
+            # 시리얼라이저가 {"message": "..."} 형태로 넣어줌
+            return Response(detail if isinstance(detail, dict) else {"message": "가입되지 않은 사용자입니다."},
+                            status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as exc:
+            return Response({"errors": exc.detail},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # 성공 시: 재설정 토큰 발급 + 메일 발송
+        user = serializer.validated_data["user"]
+
+        # 1) 재설정 토큰 생성 (서명 토큰)
+        #    payload 예시: {"sub": user_seq, "uid": user_id}
+        #    검증 시: signing.loads(token, salt="pwreset", max_age=1800)  # 30분 권장
+        token = signing.dumps({"sub": user.user_seq, "uid": user.user_id}, salt="pwreset")
+
+        # 2) 재설정 링크 구성
+        base = self._reset_base_url().rstrip("/")
+        reset_link = f"{base}?token={token}"
+
+        # 3) 메일 발송 (Email backend 설정 필요)
+        #    settings.DEFAULT_FROM_EMAIL, EMAIL_BACKEND 등이 설정되어 있어야 실제 발송됨
+        subject = "[비밀번호 재설정 안내]"
+        msg = (
+            "비밀번호 재설정을 요청하셨습니다.\n\n"
+            f"아래 링크를 통해 비밀번호를 재설정하세요 (유효기간 30분):\n{reset_link}\n\n"
+            "본 요청을 본인이 하지 않았다면 이 메일을 무시하세요."
+        )
+        try:
+            send_mail(
+                subject=subject,
+                message=msg,
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception:
+            # 메일 서버/환경 문제 등 -> 필요 시 500으로 분기
+            return Response({"message": "서버 내부 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # 200: 성공 메시지
+        res = FindPasswordResponseSerializer({"message": "비밀번호 재설정 메일을 발송했습니다."}).data
+        return Response(res, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────
+# 9. 비밀번호 변경 - 클래스형 뷰
+# POST /api/auth/change-password/ 
+# ─────────────────────────────────────────────────────────
+class ChangePasswordView(APIView):
+    # 커스텀 메시지를 내려주기 위해 IsAuthenticated 대신 AllowAny + 시리얼라이저 검증으로 처리
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # (A) 파싱/미디어타입 오류 -> 400
+        try:
+            data = request.data
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # (B) 유효성 검증 (컨텍스트에 로그인 사용자 전달)
+        serializer = ChangePasswordRequestSerializer(
+            data=data,
+            context={"user": request.user if getattr(request.user, "is_authenticated", False) else None},
+        )
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError as exc:
+            detail = exc.detail
+            # 비인증 -> 401
+            if (not getattr(request.user, "is_authenticated", False)) and isinstance(detail, dict) and "message" in detail:
+                return Response({"message": detail["message"]}, status=status.HTTP_401_UNAUTHORIZED)
+            # 나머지 유효성 오류 -> 400
+            if isinstance(detail, dict) and "message" in detail:
+                return Response({"message": detail["message"]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"errors": detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        # (C) 저장: 새 비밀번호 해시 후 저장
+        user = serializer.validated_data["user"]
+        new_pw = serializer.validated_data["new_password"]
+        user.password_hash = make_password(new_pw)
+        user.save(update_fields=["password_hash"])
+
+        # (D) 보안: 기존 refresh 토큰 블랙리스트 + 쿠키 삭제(선택적이지만 권장)
+        resp = Response(ChangePasswordResponseSerializer({"message": "비밀번호가 변경되었습니다."}).data,
+                        status=status.HTTP_200_OK)
+
+        raw_refresh = request.COOKIES.get("refresh")
+        if raw_refresh:
+            try:
+                refresh = RefreshToken(raw_refresh)
+                try:
+                    refresh.blacklist()  # simplejwt blacklist 앱 사용 시
+                except AttributeError:
+                    pass  # 블랙리스트 미사용 환경
+            except TokenError:
+                pass  # 만료/위변조여도 무시
+            resp.delete_cookie("refresh", path="/auth")
+
+        return resp
+
+
+# ─────────────────────────────────────────────────────────
+# 10. 관리자 권한 부여(승격) - 클래스형 뷰
+# POST /api/auth/admin/promote/
+# ─────────────────────────────────────────────────────────
+class AdminPromoteView(APIView):
+    # 인증 실패/권한 실패 메시지를 명세대로 내려주기 위해 AllowAny + 시리얼라이저 검증 사용
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # (A) 파싱/미디어타입 오류 -> 400
+        try:
+            data = request.data
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # (B) 유효성 검증 (요청자 컨텍스트 전달)
+        serializer = AdminPromoteRequestSerializer(
+            data=data,
+            context={"user": request.user if getattr(request.user, "is_authenticated", False) else None},
+        )
+        try:
+            serializer.is_valid(raise_exception=True)
+        except PermissionDenied as pd:
+            # 슈퍼관리자 아님 -> 403
+            detail = getattr(pd, "detail", {})
+            return Response(detail if isinstance(detail, dict) else {"message": "슈퍼 관리자가 아닙니다."},
+                            status=status.HTTP_403_FORBIDDEN)
+        except ValidationError as exc:
+            # 잘못된 요청/필드 오류 -> 400
+            detail = exc.detail
+            if isinstance(detail, dict) and "message" in detail:
+                return Response({"message": detail["message"]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"errors": detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        # (C) 승격 처리
+        target = serializer.validated_data["target_user"]
+        actor = serializer.validated_data["actor"]
+        granted_at = timezone.now()
+
+        # ADMIN 등급 객체 조회 (0: USER, 1: ADMIN, 2: SUPER_ADMIN 가정)
+        try:
+            admin_level = UserLevel.objects.get(pk=1)
+        except UserLevel.DoesNotExist:
+            # 등급 테이블 설정 오류 -> 서버 문제로 간주
+            return Response({"message": "서버 내부 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            with transaction.atomic():
+                target.grade_code = admin_level
+                # 모델에 granted_at 필드가 있다고 가정(명세/이전 대화 기준)
+                target.granted_at = granted_at
+                target.save(update_fields=["grade_code", "granted_at"])
+        except IntegrityError:
+            return Response(
+                {"errors": {"non_field_errors": ["승격 처리 중 오류가 발생했습니다. 다시 시도해주세요."]}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # (D) 200: 성공 응답
+        res = AdminPromoteResponseSerializer({
+            "user_seq": target.user_seq,
+            "admin_level": "ADMIN",
+            "granted_at": granted_at,
+            "acted_seq": actor.user_seq,
+            "message": "관리자 권한이 부여되었습니다.",
+        }).data
+        return Response(res, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────
+# 11. 관리자 권한 해제(강등) - 클래스형 뷰
+# POST /api/auth/admin/demote/
+# ─────────────────────────────────────────────────────────
+class AdminDemoteView(APIView):
+    # 인증/권한 메시지를 명세대로 내려주기 위해 AllowAny + 시리얼라이저 검증 사용
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # (A) 파싱/미디어타입 오류 -> 400
+        try:
+            data = request.data
+        except (ParseError, UnsupportedMediaType):
+            return Response({"message": "잘못된 요청입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # (B) 유효성 검증 (요청자 컨텍스트 전달)
+        serializer = AdminDemoteRequestSerializer(
+            data=data,
+            context={"user": request.user if getattr(request.user, "is_authenticated", False) else None},
+        )
+        try:
+            serializer.is_valid(raise_exception=True)
+        except PermissionDenied as pd:
+            detail = getattr(pd, "detail", {})
+            return Response(detail if isinstance(detail, dict) else {"message": "슈퍼 관리자가 아닙니다."},
+                            status=status.HTTP_403_FORBIDDEN)
+        except ValidationError as exc:
+            detail = exc.detail
+            if isinstance(detail, dict) and "message" in detail:
+                return Response({"message": detail["message"]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"errors": detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        # (C) 강등 처리: ADMIN(1) -> USER(0)
+        target = serializer.validated_data["target_user"]
+        actor = serializer.validated_data["actor"]
+        demoted_at = timezone.now()
+
+        # USER 등급 객체 조회 (0: USER, 1: ADMIN, 2: SUPER_ADMIN 가정)
+        try:
+            user_level = UserLevel.objects.get(pk=0)
+        except UserLevel.DoesNotExist:
+            return Response({"message": "서버 내부 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            with transaction.atomic():
+                target.grade_code = user_level
+                # 모델에 demoted_at 필드가 있다고 가정(명세 기준)
+                target.granted_at = None  # 선택: 관리자 부여시각 초기화 (모델에 따라 생략 가능)
+                target.save(update_fields=["grade_code", "granted_at"])
+        except IntegrityError:
+            return Response(
+                {"errors": {"non_field_errors": ["강등 처리 중 오류가 발생했습니다. 다시 시도해주세요."]}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # (D) 200: 성공 응답
+        res = AdminDemoteResponseSerializer({
+            "user_seq": target.user_seq,
+            "demoted_at": demoted_at,
+            "acted_seq": actor.user_seq,
+            "message": "관리자 권한이 해제되었습니다.",
+        }).data
+        return Response(res, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────
+# 12. 회원 목록 조회 - 클래스형 뷰
+# GET /api/auth/users/
+# ─────────────────────────────────────────────────────────
+class UserListView(APIView):
+    # 커스텀 메시지(401/403)를 컨트롤하기 위해 AllowAny 사용 후 직접 체크
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        # (A) 인증/권한 체크
+        user = request.user if getattr(request.user, "is_authenticated", False) else None
+        if not user:
+            return Response({"message": "로그인이 필요합니다."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        level = getattr(getattr(user, "grade_code", None), "grade_code", 0)  # 0: USER, 1: ADMIN, 2: SUPER_ADMIN 가정
+        if level < 1:
+            return Response({"message": "관리자만 접근할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
+
+        # (B) 쿼리 파라미터(page, size) 파싱/검증
+        qp = request.query_params
+        try:
+            page = int(qp.get("page", "1"))
+            size = int(qp.get("size", "10"))
+        except ValueError:
+            return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if page < 1 or size < 1:
+            return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # (선택) size 상한
+        if size > 100:
+            size = 100
+
+        # (C) 조회 + 페이지네이션
+        qs = (
+            User.objects.select_related("grade_code")
+            .order_by("-user_seq")  # 최신 가입 순 (원하면 user_seq 오름차순 등으로 변경)
+        )
+
+        total_count = qs.count()
+        total_pages = math.ceil(total_count / size) if total_count else 0
+
+        start = (page - 1) * size
+        end = start + size
+        rows = qs[start:end]
+
+        # (D) items 구성
+        items = []
+        for u in rows:
+            g = getattr(u, "grade_code", None)
+            items.append({
+                "user_seq": getattr(u, "user_seq"),
+                "user_id": getattr(u, "user_id"),
+                "user_name": getattr(u, "user_name"),
+                "grade_code": getattr(g, "grade_code", 0),
+                "grade_name": getattr(g, "grade_name", ""),
+            })
+
+        # (E) 응답 직렬화 및 반환
+        payload = {
+            "items": items,
+            "page": page,
+            "size": size,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "message": "",
+        }
+        res = UserListResponseSerializer(payload).data
+        return Response(res, status=status.HTTP_200_OK)
