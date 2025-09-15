@@ -64,6 +64,10 @@
 
 import re
 
+from django.core.validators import RegexValidator
+from datetime import date
+from django.utils import timezone
+
 # 파이썬에서 타입 힌트(Type Hint)를 제공하기 위한 모듈. typing에서 Dict와 Any를 가져옴
 from typing import Dict, Any
 
@@ -116,8 +120,10 @@ from .models import UserLevel, User
 # (1) 모델 필드 자동 생성 불가능 => 직접 선언해야 됨
 # (2) CRUD 기본 동작 자동 구현 불가능 => create(), update() 등의 함수를 직접 만들어야됨
 # (3) 모델 유효성 검증 => 각각의 필드에 max_length, unique 등을 직접 코딩해야 함
-# (4) ORM 객체 <-> JSON 자동 변환 => 가능하지만 수동 선언 필요
-class IdPrecheckRequestSerializer(serializers.Serializer):
+# (4) ORM 객체 <-> JSON 자동 변환 => 가능하지만 수동 선언 필요 
+
+# 자바로 치면 => public class IdPrecheckRequestSerializer extends Serializer
+class IdPrecheckRequestSerializer(serializers.Serializer):   # IdPrecheckRequestSerializer의 부모 클래스 Serializer 상속받음
 
     # <시리얼라이저 필드란?>
     # API에서 주고받을 데이터의 “한 조각”을 정의한 것 => JSON request body/response body의 key-value 쌍 하나를 표현하는 데이터 단위
@@ -149,10 +155,11 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
         # 명세서의 message 필드는 프론트에서 직접 관리 할 수도 있고 백엔드에서 메시지를 만들어서 보낸다음 프론트는 받아서 출력하게만 할 수도 있는데 이 프로젝트에선 모든 메시지를 백엔드에서 처리한 후 보낼 예정이다.
         # 메시지가 개발용도가 아니라 사용자에게 보여주기 위한 목적이라면 명세서의 response body의 message 필드에 추가해야한다.
         # 그리고 만약 모든 메시지를 프론트엔드에서 직접 관리하기로 정했다면 API 명세서 response body에서 message 필드는 제외해야한다.
-        # 여기서의 에러 메시지는 시리얼라이저 검증 후 serializer.errors라는 딕셔너리 형태로 뷰(View)까지 전달된다.
+        # 여기서의 에러 메시지는 시리얼라이저 검증 후 serializer.errors라는 딕셔너리 형태로 뷰(View)까지 전달된다. -> 여기서의 메시지도 뷰의 _first_error_message 함수를 통해 추출된다.
         # 그리고 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)] 일때의 response body는 이미 여기서 로직구현(RegexField로 형식 체크, validate_user_id()로 중복 체크) 후 판단까지 했으므로
         # 뷰에서는 [(2) 200 OK 형식오류, (3) 200 OK 중복(이미 존재)]는 포맷구성만 하면되고  
         # 나머지 [(1) 200 OK 사용가능(중복 X, 형식 오류 X), 2. 400 Bad Request, 3. 429 Too Many Requests]는 뷰에서 로직구현+포맷구성 까지 하면된다.
+        # 시리얼라이저의 모든 에러 메시지(error_message, message, default_error_message, ... 등)는 모두 serializer.errors에 저장된다.
         error_messages={
             "invalid": "아이디는 영문 소문자와 숫자만 사용 가능하며 5~20자여야 합니다.",  # 정규식에 맞지 않을 때
             "blank": "아이디를 입력해주세요.",                                          # 빈 문자열 입력 시
@@ -162,7 +169,15 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
     # <validate_<필드명>() vs validate() 함수 차이>
     # 1. validate_<필드명>() => 이 한개의 필드만 개별적으로 검사 수행
     # 2. validate() => 모든 필드의 관계를 함께 검증
-    # => 둘 다 명시적으로 호출하지 않아도 DRF가 자동으로 호출해주는 메서드지만, 아래처럼 오버라이드해서 커스터마이징 할 수 있다.
+    # 둘 다 명시적으로 호출하지 않아도 뷰에서 is_valid() 함수 호출 시 자동으로 실행되는 메서드지만, 아래처럼 오버라이드해서 커스터마이징 할 수 있다.
+    # 하지만 시리얼라이저 클래스에 validate_<필드명>, validate() 함수를 정의해놓지 않으면 뷰에서 is_valid()를 호출해도 실행되지 않는다.
+    # 물론 Serializer 클래스에는 validate() 메서드가 정의되어 있어서 오버라이드를 하지 않아도 실행되긴 하지만 validate 안에 내부 로직이 없는 빈 메서드라서 실질적으로 실행이 안되는것과 마찬가지이다.
+    # 즉, 얘네들은 개발자가 직접 클래스 안에 오버라이드 했을때만 실행된다.
+
+    # <is_valid()가 호출될 때 실행순서>
+    # (1) 각 필드에 정의된 기본 유효성 검사 -> 이건 validate_<필드명>(), validate() 오버라이드에 관계없이 항상 실행됨
+    # (2) validate_<필드명>() 메서드들
+    # (3) validate() 메서드
 
     # 2. 아이디 중복 검사 + 개발자가 임의로 정한 에러 코드 문자열 (code="duplicate")
     # validate_<필드명> 형식으로 메서드를 작성하면, DRF가 자동으로 그 필드 값이 유효한지 추가 검증을 수행
@@ -183,8 +198,7 @@ class IdPrecheckRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError("이미 사용 중인 아이디입니다.", code="duplicate")
         
         # <성공 시>
-        # 중복이 없으면 검증을 통과시키고 검증된 value(user_id)를 그대로 뷰로 반환
-        # 성공 시 -> return으로 반환된 user_id가 serializer.validated_data에 저장되어 뷰로 전달됨
+        # 중복이 없으면 -> return으로 반환된 value(user_id)가 serializer.validated_data에 저장되어 뷰로 전달됨
         return value
 
 
@@ -282,14 +296,33 @@ class EmailPrecheckResponseSerializer(serializers.Serializer):
 class RegisterRequestSerializer(serializers.ModelSerializer):
 
     # 모델 필드 오버라이드
+    # 이름 규칙: 한글/영문, 공백 허용, 2~20자
     # source="user_name" -> 내부적으로 모델의 user_name 필드와 연결
     username = serializers.CharField(
         source="user_name",
-        max_length=100,
+        max_length=20,
         trim_whitespace=True,
         write_only=True,
         allow_blank=False,
+
+        # 여기서 message, error_messages는 모두 serializer.errors에 저장됨
+        validators=[
+            RegexValidator(
+                regex=r"^(?=.{2,20}$)[가-힣a-zA-Z]+(?: [가-힣a-zA-Z]+)*$",
+                message="이름은 2~20자 한글/영문과 공백만 사용할 수 있습니다."
+            )
+        ],
         error_messages={"blank": "이름을 입력해주세요."},
+    )
+
+    # 생년월일: 프론트가 'YYYY-MM-DD'로 전송 -> 서버에서 최종 검증
+    birth_date = serializers.DateField(
+        write_only=True,
+        input_formats=["%Y-%m-%d"],
+        error_messages={
+            "invalid": "생년월일 형식이 올바르지 않습니다. 예: 2001-09-15",
+            "required": "생년월일을 입력해주세요.",
+        },
     )
 
     # 커스텀 필드 - 모델(models.py)에 없고 사용자가 새롭게 만들어낸 필드 (사용자가 직접 정의한 필드)
@@ -385,6 +418,21 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
         if v is not True:
             raise serializers.ValidationError("약관/정책 동의가 필요합니다.")
         return v
+    
+    # ── 2. 생년월일 정책 검증 - 단일 필드 검증 ──────────────────────────────
+    def validate_birth_date(self, v: date) -> date:
+        today = timezone.localdate()  # TZ 고려
+        if v > today:
+            raise serializers.ValidationError("생년월일은 오늘 이후일 수 없습니다.")
+
+        # 만 나이 계산
+        age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
+        if age < 14:
+            raise serializers.ValidationError("만 14세 이상만 가입할 수 있습니다.")
+        if age > 120:
+            raise serializers.ValidationError("생년월일을 다시 확인해주세요.")
+        return v
+
 
     # ── 2. 비밀번호 정책 헬퍼함수 ────────────────────────────────────────────────────
     # 헬퍼 함수 => 어떤 기능을 수행하는 주요 함수 안에서 반복되거나 복잡한 작업을 분리해 놓은 작은 보조 함수
@@ -573,14 +621,9 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RegisterResponseSerializer(serializers.ModelSerializer):
-
-    # 커스텀 필드
-    # read_only=True: 서버에서 응답(Response)으로만 사용되는 읽기 전용 옵션. 서버 -> 클라이언트 방향 단방향 데이터
-    message = serializers.CharField(read_only=True, allow_blank=True)
-
     class Meta:
         model = User
-        fields = ["user_seq", "joined_at", "message"]  
+        fields = ["user_seq", "joined_at"]   # message 제거
 
         # read_only_fields: ModelSerializer에서 제공하는 내장 옵션
         # read_only=True를 필드마다 하나씩 붙이는 대신, Meta 내부에서 한 번에 묶어서 읽기 전용으로 설정할 수 있다.
@@ -618,6 +661,7 @@ class LoginRequestSerializer(serializers.Serializer):
         "invalid_credentials": "아이디 또는 비밀번호가 일치하지 않습니다.",
     }
 
+    # Dict[str, Any] => key 타입: str, value 타입: Any
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         uid = attrs.get("user_id")
         pw = attrs.get("password")
@@ -880,7 +924,6 @@ class AdminPromoteResponseSerializer(serializers.Serializer):
     message = serializers.CharField(allow_blank=True, read_only=True)
 
 
-
 # ─────────────────────────────────────────────────────────
 # 19. 관리자 권한 해제(강등) - request 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
@@ -934,7 +977,6 @@ class AdminDemoteResponseSerializer(serializers.Serializer):
     )
     acted_seq = serializers.IntegerField(min_value=1, read_only=True)
     message = serializers.CharField(allow_blank=True, read_only=True)
-
 
 
 # ─────────────────────────────────────────────────────────
