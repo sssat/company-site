@@ -62,11 +62,10 @@
 # DELETE는 삭제만하기 때문에 직렬화/역직렬화 과정을 거치지 않는다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-import re
-
 from django.core.validators import RegexValidator
 from datetime import date
 from django.utils import timezone
+from .validators.password_policy import validate_password_policy
 
 # 파이썬에서 타입 힌트(Type Hint)를 제공하기 위한 모듈. typing에서 Dict와 Any를 가져옴
 from typing import Dict, Any
@@ -433,52 +432,12 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("생년월일을 다시 확인해주세요.")
         return v
 
-
-    # ── 2. 비밀번호 정책 헬퍼함수 ────────────────────────────────────────────────────
+    # ── 3. 비밀번호 정책 헬퍼함수 ────────────────────────────────────────────────────
     # 헬퍼 함수 => 어떤 기능을 수행하는 주요 함수 안에서 반복되거나 복잡한 작업을 분리해 놓은 작은 보조 함수
     # 가독성과 유지보수를 위해 코드 일부를 분리해 독립적으로 만든다.
     # validate()가 회원가입 시 모든 검증을 담당하는 본 함수이고, 얘네들은 validate() 안에서만 쓰이는 보조 함수
 
-    # (1) (대문자/소문자/숫자/특수문자) 중 3종 이상 포함
-    def _has_3_of_4_categories(self, pw: str) -> bool:
-        categories = 0
-        categories += bool(re.search(r"[A-Z]", pw))          # 대문자가 포함되면 +1
-        categories += bool(re.search(r"[a-z]", pw))          # 소문자가 포함되면 +1
-        categories += bool(re.search(r"\d", pw))             # 숫자가 포함되면 +1
-        categories += bool(re.search(r"[^A-Za-z0-9]", pw))   # 특수문자가 포함되면 +1
-
-        return categories >= 3  # 3 이상이면 True 반환
-
-    # (2) 연속 숫자 4자리(오름/내림) 금지: 1234, 2345, 4321, 9876 등
-    def _has_sequential_digits_4(self, pw: str) -> bool:
-        for m in re.finditer(r"\d{4,}", pw):
-            run = m.group()
-            for i in range(len(run) - 3):
-                w = run[i:i+4]
-                diffs = [int(w[j+1]) - int(w[j]) for j in range(3)]
-                if all(d == 1 for d in diffs) or all(d == -1 for d in diffs):
-                    return True  # 연속 숫자가 있다면 True 반환
-        return False             # 연속 숫자가 없다면 False 반환
-
-    # (3) 동일 문자 4회 연속 금지
-    def _has_4_same_in_a_row(self, pw: str) -> bool:
-        return bool(re.search(r"(.)\1{3,}", pw))  # 같은 문자가 4회이상 발견되면 True 반환. 없으면 False 반환
-
-    # (4) 비밀번호에 user_id의 3글자 이상 연속 부분문자열 포함 금지(대소문자 무시)
-    # 예를 들어, 아이디가 abcdef일 때 비밀번호가 xyzABC123!라면 -> ABC가 들어 있으므로 정책 위반
-    def _contains_userid_substring(self, pw: str, user_id: str, min_len: int = 3) -> bool:
-        if not user_id:
-            return False
-        a = pw.lower()
-        b = str(user_id).lower()
-        for L in range(min_len, len(b) + 1):
-            for i in range(0, len(b) - L + 1):
-                sub = b[i:i+L]
-                if sub and sub in a:
-                    return True  # 정책 위반 시 True 반환
-        return False             # 통과 시 False 반환
-
-    # (5) 아이디 중복확인/이메일 중복확인 토큰이 유효한지 확인하기 위한 함수
+    # (1) 아이디 중복확인/이메일 중복확인 토큰이 유효한지 확인하기 위한 함수
     # 필드에서 대충 통과시킨 체크 토큰에 대한 유효성 검사를 여기서 제대로 수행
     def _verify_precheck_token(self, token: str, kind: str, subject: str, max_age: int = 600) -> bool:
         # token: 프론트엔드에서 전달된 사전 중복검사 토큰 문자열
@@ -527,7 +486,7 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
             and str(payload.get("sub", "")).lower() == str(subject).lower()  # test123 == test123 이면 True
         )
 
-    # ── 3. 회원가입 시 최종 검증을 수행하는 함수 - 여러 필드 교차 검증 ─────────────────────────────────────────────────────────
+    # ── 4. 회원가입 시 최종 검증을 수행하는 함수 - 여러 필드 교차 검증 ─────────────────────────────────────────────────────────
     def validate(self, attrs: dict) -> dict:
         # attrs: 프론트엔드에서 보낸 request body 데이터가 들어있는 딕셔너리
 
@@ -546,17 +505,8 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
         if gender not in ("M", "F"):
             raise serializers.ValidationError({"gender": "성별은 'M' 또는 'F'만 허용됩니다."})
 
-        # 3) 비밀번호 보안 정책 검증
-        violations = []
-        if not self._has_3_of_4_categories(pw1):
-            violations.append("대문자/소문자/숫자/특수문자 중 3종 이상을 포함해야 합니다.")
-        if self._has_sequential_digits_4(pw1):
-            violations.append("연속된 숫자 4자를 사용할 수 없습니다(예: 1234, 4321).")
-        if self._has_4_same_in_a_row(pw1):
-            violations.append("동일 문자를 4회 연속 사용할 수 없습니다.")
-        if self._contains_userid_substring(pw1, user_id, min_len=3):
-            violations.append("비밀번호에 아이디의 3글자 이상 연속 문자열을 포함할 수 없습니다.")
-
+        # 3) 비밀번호 보안 정책 검증 - 공용 규칙 적용
+        violations = validate_password_policy(pw1, user_id=user_id)
         if violations:
             # 여러 개의 위반사항을 모아 한꺼번에 프론트로 전달
             # 예: {"password": ["대문자/소문자/숫자/특수문자 중 3종 이상을 포함해야 합니다.","연속된 숫자 4자를 사용할 수 없습니다(예: 1234, 4321)."]}
@@ -586,7 +536,7 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
         # 이후 create() 메서드에서 DB 저장 처리
         return attrs
 
-    # ── 4. 회원 생성 로직 ──────────────────────────────────────────────────────────────
+    # ── 5. 회원 생성 로직 ──────────────────────────────────────────────────────────────
     # create() 메서드는 회원가입 시 최종적으로 DB에 사용자 데이터를 저장하는 역할을 함
     def create(self, validated_data):
         # validated_data: validate() 메서드에서 검증을 통과한 값들이 담긴 딕셔너리
@@ -853,6 +803,12 @@ class ChangePasswordRequestSerializer(serializers.Serializer):
         # 3) 새 비밀번호가 현재와 동일 금지
         if curr == new:
             raise serializers.ValidationError({"message": self.error_messages["same_password"]})
+        
+        # ✅ 4) 회원가입과 동일한 보안 규칙 적용
+        violations = validate_password_policy(new, user_id=getattr(user, "user_id", None))
+        if violations:
+            # 회원가입과 동일 포맷으로 리턴 (키명 통일 권장: "new_password")
+            raise serializers.ValidationError({"new_password": violations})
         
         attrs["user"] = user  # 뷰에서 저장 시 재조회 없이 사용
         return attrs
