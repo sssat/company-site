@@ -41,10 +41,12 @@
 # 즉, views.py 전체 파일을 통째로 뷰라고 부르는 것이 아니라, 각 엔드포인트를 처리하는 개별 클래스나 함수를 뷰라고 부른다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-from typing import Any, Dict, Optional, List
-from django.contrib.auth.hashers import make_password
+from typing import Any, Dict, List
 from django.core import signing
 from .models import User, UserLevel
+from django.contrib.auth.hashers import make_password
+from django.core.exceptions import FieldError
+import math
 
 # Django 프로젝트의 설정값을 코드에서 사용하기 위해 가져옴
 from django.conf import settings
@@ -52,9 +54,23 @@ from django.conf import settings
 # JSON을 파싱(의미 있는 구조화된 데이터로 해석하는 과정)하다가 실패했을 때 발생하는 표준 예외 클래스
 from rest_framework.exceptions import ParseError
 
+# accounts 앱 안에 있는 auth.py 파일에서 AccountsJWTAuthentication 클래스를 불러옴
+from accounts.auth import AccountsJWTAuthentication
+
+# 트랜잭션: 여러 SQL 작업을 하나의 논리적 단위로 묶어 처리 => 모두 성공하거나 모두 실패하게 만드는 안전 장치
+# transaction: Django에서 데이터베이스 트랜잭션을 제어하기 위한 유틸리티 => DB 작업(INSERT, UPDATE, DELETE 등)을 안전하게 하나의 묶음으로 관리할 수 있게 해줌
+# IntegrityError: 데이터베이스의 무결성 제약 조건이 위반될 때 발생하는 예외 클래스
 from django.db import transaction, IntegrityError
+
+# rest_framework_simplejwt 라이브러리에서 제공하는 JWT 토큰 관련 예외 클래스
 from rest_framework_simplejwt.exceptions import TokenError
-import math
+
+# Django REST Framework(DRF)에서 제공하는 표준 예외 클래스들
+# ParseError: 클라이언트 요청의 Body 데이터를 파싱할 때 문제가 생겼을 때 발생
+# UnsupportedMediaType: 요청의 Content-Type 헤더가 지원하지 않는 타입일 때 발생
+# ValidationError: 데이터 유효성 검증 실패 시 발생
+# NotFound: 리소스가 존재하지 않을 때 발생
+# PermissionDenied: 권한이 없는 사용자가 접근하려 할 때 발생
 from rest_framework.exceptions import ParseError, UnsupportedMediaType, ValidationError, NotFound, PermissionDenied
 
 # 비밀번호 변경 시각, 관리자 권한 부여 시각 등을 기록할 때 timezone.now() 사용
@@ -132,6 +148,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # 등록되어 있다면 -> 403 Forbidden 응답
 # 하지만 블랙리스트 기능을 도입하면 JWT의 가장 큰 장점인 "완전한 무상태(Stateless)"구조가 일부 희생되는 단점이 있다.
 
+# 이 프로젝트에선 블랙리스트 안씀
 # BlacklistedToken 모델을 가져오는 시도를 한다.
 # 성공적으로 import 되면 -> 프로젝트가 블랙리스트 기능을 지원하고 있다는 뜻(설치/설정된 경우) -> SIMPLEJWT_BLACKLIST = True
 try:
@@ -389,9 +406,12 @@ class RegisterView(APIView):
 # 4. 로그인 - 클래스형 뷰
 #  POST /api/auth/login/
 # ─────────────────────────────────────────────────────────
+
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    # 헬퍼 함수
+    # User 모델의 grade_code(회원 등급) 값을 읽어서 문자열 역할(role) 로 변환하는 함수
     def _map_role(self, user) -> str:
         level = getattr(user, "grade_code", None)
         code = getattr(level, "grade_code", None)
@@ -402,31 +422,59 @@ class LoginView(APIView):
         return "USER"
 
     def post(self, request, *args, **kwargs):
-        # 1) 400: 파싱/미디어타입 오류
+        # 1) 클라이언트가 보낸 request body(JSON)를 request.data로 파싱 -> 에러 발생 시 400
         try:
             data = request.data
         except (ParseError, UnsupportedMediaType):
-            return Response({"message": "잘못된 요청입니다."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 2) 유효성 검증
+        # 2) LoginRequestSerializer에 data를 전달해 역직렬화 + 유효성 검사 수행 -> 에러 발생 시 401, 400
         serializer = LoginRequestSerializer(data=data)
         try:
             serializer.is_valid(raise_exception=True)
         except ValidationError as exc:
             detail = exc.detail
             if isinstance(detail, dict) and "message" in detail:
-                return Response({"message": detail["message"]},
-                                status=status.HTTP_401_UNAUTHORIZED)
-            return Response({"errors": detail},
-                            status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": detail["message"]}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"errors": detail}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3) 자격증명 성공 -> 토큰 발급
-        user = serializer.validated_data["user"]
-        refresh = RefreshToken.for_user(user)
+        # 3) JWT 토큰 발급
+        user = serializer.validated_data["user"]  # 여기서 user key의 value는 DB의 한 행인 user 객체
+
+        # 리프레시 토큰 빈 객체 생성
+        # RefreshToken()를 그냥 호출하면, SimpleJWT가 token_type="refresh", jti, exp, iat 등을 자동으로 채운 새 리프레시 토큰을 만든다.
+        # 하지만 사용자 식별자는 자동으로 안 들어가기 때문에 직접 우리가 원하는 키로 값을 넣어줘야한다.
+        refresh = RefreshToken()
+
+        # 어떤 키 이름으로 식별자를 넣을지 결정
+        # settings.py의 SimpleJWT 설정에서 USER_ID_CLAIM을 읽어옴. 없으면 기본 사용자 식별자를 "user_seq"로 지정
+        # 즉, 액세스 토큰 검증 시 인증 로직이 읽어갈 클레임 키 이름을 여기서 확정
+        claim_key = getattr(settings, "SIMPLE_JWT", {}).get("USER_ID_CLAIM", "user_seq") 
+
+        # 방금 정한 claim_key에 실제 값(user.user_seq)을 넣는다.
+        # 이후 인증 단계에서 액세스 토큰의 페이로드에서 이 값을 읽어 User를 조회한다.
+        refresh[claim_key] = getattr(user, "user_seq")  
+
+        # (선택) 디버깅/편의용 추가 클레임
+        # 사람이 보기 편한 로그인 아이디를 보조 정보로 넣음
+        # print(refresh) =
+        # {
+        #     "token_type": "refresh",
+        #     "exp": 1727401200,
+        #     "iat": 1726801200,
+        #     "jti": "3d87bb21-7c90-4d91-9ef0-02eaa682111c",
+        #     "user_seq": 15,
+        #     "user_id": "hong123"
+        # }
+        refresh["user_id"] = getattr(user, "user_id")
+
+        # 리프레시에서 액세스 토큰 뽑기
+        # refresh.access_token은 리프레시의 클레임을 복사해 새 액세스 토큰을 만든다.
+        # token_type="access", jti, exp(settings.py의 ACCESS_TOKEN_LIFETIME) 등은 액세스용으로 자동으로 새로 셋업된다.
+        # 리프레시에 넣은 나머지 커스텀 클레임들(user_seq, user_id)은 액세스에도 그 값 그대로 들어간다.
         access = str(refresh.access_token)
 
-        # 4) 응답 본문 (명세 예시와 동일 키만)
+        # 4) response body 구성
         body = {
             "access": access,
             "user_seq": getattr(user, "user_seq"),
@@ -434,16 +482,18 @@ class LoginView(APIView):
             "role": self._map_role(user),
         }
 
-        # 5) Refresh 토큰을 HttpOnly 쿠키로 설정
+        # 5) Refresh 토큰을 HttpOnly 쿠키로 설정(선택)
         resp = Response(body, status=status.HTTP_200_OK)
+
+        # set_cookie 메서드를 사용해 HTTP 응답에 쿠키를 포함시킴
         resp.set_cookie(
-            key="refresh",
-            value=str(refresh),
-            max_age=int(refresh.lifetime.total_seconds()),
-            httponly=True,
-            secure=True,            # 배포 환경에선 True 유지
-            samesite="Strict",
-            path="/api/auth/",
+            key="refresh",                            # 쿠키 이름
+            value=str(refresh),                       # 쿠키 값 (리프레시 토큰 문자열)
+            max_age=int(refresh.lifetime.total_seconds()),  # 쿠키 만료 시간
+            httponly=True,                            # 자바스크립트에서 접근 불가 -> XSS 방지
+            secure=True,                              # HTTPS에서만 전송 (배포환경에서 필수)
+            samesite="Strict",                        # CSRF 방지 옵션 (Strict 모드)
+            path="/api/auth/",                        # 특정 경로에서만 쿠키 전송
         )
         return resp
 
@@ -460,30 +510,26 @@ class TokenRefreshView(APIView):
         try:
             _ = request.data  # 바디는 사용하지 않지만, 파서 오류를 유발시켜 통일 처리
         except (ParseError, UnsupportedMediaType):
-            return Response({"message": "잘못된 요청입니다."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"message": "잘못된 요청입니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # 2) 쿠키에서 refresh 추출
         raw_refresh = request.COOKIES.get("refresh")
         if not raw_refresh:
             # 401: 리프레시 토큰 누락
-            res = TokenRefreshResponseSerializer({"message": "리프레시 토큰을 전달하세요."}).data
+            res = TokenRefreshResponseSerializer(
+                {"message": "리프레시 토큰을 전달하세요."}
+            ).data
             return Response(res, status=status.HTTP_401_UNAUTHORIZED)
 
-        # 3) 리프레시 검증 -> 엑세스 재발급
+        # 3) 리프레시 검증 -> 엑세스 재발급 (블랙리스트 미사용)
         try:
-            refresh = RefreshToken(raw_refresh)
-
-            # 블랙리스트 사용 시 검증
-            # simplejwt의 blacklist 앱이 설치되어 있으면 체크 가능
-            try:
-                refresh.check_blacklist()
-            except AttributeError:
-                pass  # 블랙리스트 미사용 환경
-
-            access = str(refresh.access_token)
+            refresh = RefreshToken(raw_refresh)   # 유효성/만료 검증 포함
+            access = str(refresh.access_token)    # 새 엑세스 토큰 생성
         except TokenError:
-            # 401: 만료/위변조/블랙리스트 등
+            # 401: 만료/위변조 등
             res = TokenRefreshResponseSerializer(
                 {"message": "리프레시 토큰이 유효하지 않거나 만료되었습니다."}
             ).data
@@ -503,38 +549,25 @@ class LogoutView(APIView):
 
     def post(self, request, *args, **kwargs):
         # 1) 400: 파싱/미디어타입 오류
+        # 로그아웃 API는 실제로 request body를 사용하지 않음 -> 하지만 DRF에서 request.data를 접근해 JSON 파싱 에러나 지원하지 않는 Content-Type 에러가 발생하면 400으로 통일 응답
         try:
-            _ = request.data  # 바디는 사용하지 않지만 파서 에러를 유발시켜 통일 처리
+            _ = request.data
         except (ParseError, UnsupportedMediaType):
-            return Response({"message": "잘못된 요청입니다."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"message": "잘못된 요청입니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # 2) 리프레시 쿠키 읽기
-        raw_refresh = request.COOKIES.get("refresh")
+        # 2) 기본 응답 생성
+        resp = Response(
+            LogoutResponseSerializer({"message": "로그아웃되었습니다."}).data,
+            status=status.HTTP_200_OK
+        )
 
-        # 3) 리프레시 블랙리스트 시도(있으면) + 쿠키 제거
-        resp = Response(LogoutResponseSerializer({"message": "로그아웃되었습니다."}).data,
-                        status=status.HTTP_200_OK)
-
-        # 쿠키 삭제
+        # 3) 쿠키 삭제 (블랙리스트 안 써도 항상 필요)
         resp.delete_cookie("refresh", path="/api/auth/")
 
-        if not raw_refresh:
-            # 쿠키가 이미 없으면 그대로 200
-            return resp
-
-        # 4) 쿠키가 있으면 토큰 검증 및 블랙리스트
-        try:
-            refresh = RefreshToken(raw_refresh)
-            # blacklist 앱 사용 시 현재 토큰 블랙리스트 처리
-            try:
-                refresh.blacklist()  # blacklist 앱이 없으면 AttributeError 발생
-            except AttributeError:
-                pass
-        except TokenError:
-            # 위변조/만료 등이어도 쿠키만 제거하고 200 반환
-            return resp
-
+        # 4) 바로 200 반환 (블랙리스트가 없으므로 서버에서 토큰을 무효화하지 않음)
         return resp
 
 
@@ -651,65 +684,45 @@ class FindPasswordView(APIView):
 
 # ─────────────────────────────────────────────────────────
 # 9. 비밀번호 변경 - 클래스형 뷰
-# POST /api/auth/change-password/ 
+# POST /api/auth/change-password/
 # ─────────────────────────────────────────────────────────
 class ChangePasswordView(APIView):
-    # 커스텀 메시지를 내려주기 위해 IsAuthenticated 대신 AllowAny + 시리얼라이저 검증으로 처리
-    permission_classes = [permissions.AllowAny]
+    authentication_classes = [AccountsJWTAuthentication]      # 커스텀 JWT 인증
+    permission_classes = [permissions.IsAuthenticated]        # 인증 필수
 
     def post(self, request, *args, **kwargs):
-        # (A) 파싱/미디어타입 오류 -> 400
-        try:
-            data = request.data
-        except (ParseError, UnsupportedMediaType):
-            return Response({"message": "잘못된 요청입니다."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        # (B) 유효성 검증 (컨텍스트에 로그인 사용자 전달)
-        serializer = ChangePasswordRequestSerializer(
-            data=data,
-            context={"user": request.user if getattr(request.user, "is_authenticated", False) else None},
+        # 1) 요청 데이터 유효성 검증 (현재 비밀번호 확인 포함)
+        s = ChangePasswordRequestSerializer(
+            data=request.data,
+            context={"user": request.user},
         )
-        try:
-            serializer.is_valid(raise_exception=True)
-        except ValidationError as exc:
-            detail = exc.detail
-            # 비인증 -> 401
-            if (not getattr(request.user, "is_authenticated", False)) and isinstance(detail, dict) and "message" in detail:
-                return Response({"message": detail["message"]}, status=status.HTTP_401_UNAUTHORIZED)
-            # 나머지 유효성 오류 -> 400
-            if isinstance(detail, dict) and "message" in detail:
-                return Response({"message": detail["message"]}, status=status.HTTP_400_BAD_REQUEST)
-            return Response({"errors": detail}, status=status.HTTP_400_BAD_REQUEST)
+        s.is_valid(raise_exception=True)
 
-        # (C) 저장: 새 비밀번호 해시 후 저장
-        user = serializer.validated_data["user"]
-        new_pw = serializer.validated_data["new_password"]
+        # 2) 시리얼라이저에서 가져온 user, 새 비밀번호로 DB 업데이트
+        user = s.validated_data["user"]
+        new_pw = s.validated_data["new_password"]
+
         user.password_hash = make_password(new_pw)
         user.save(update_fields=["password_hash"])
 
-        # (D) 보안: 기존 refresh 토큰 블랙리스트 + 쿠키 삭제(선택적이지만 권장)
-        resp = Response(ChangePasswordResponseSerializer({"message": "비밀번호가 변경되었습니다."}).data,
-                        status=status.HTTP_200_OK)
+        # 3) 응답 준비
+        resp = Response(
+            ChangePasswordResponseSerializer(
+                {"message": "비밀번호가 변경되었습니다."}
+            ).data,
+            status=status.HTTP_200_OK
+        )
 
-        raw_refresh = request.COOKIES.get("refresh")
-        if raw_refresh:
-            try:
-                refresh = RefreshToken(raw_refresh)
-                try:
-                    refresh.blacklist()  # simplejwt blacklist 앱 사용 시
-                except AttributeError:
-                    pass  # 블랙리스트 미사용 환경
-            except TokenError:
-                pass  # 만료/위변조여도 무시
-            resp.delete_cookie("refresh", path="/auth")
+        # 4) 리프레시 토큰 쿠키 삭제 (블랙리스트 미사용 → 쿠키 삭제만)
+        if request.COOKIES.get("refresh"):
+            resp.delete_cookie("refresh", path="/api/auth/")
 
         return resp
 
 
 # ─────────────────────────────────────────────────────────
 # 10. 관리자 권한 부여(승격) - 클래스형 뷰
-# POST /api/auth/admin/promote/
+# POST /api/admins/promote/
 # ─────────────────────────────────────────────────────────
 class AdminPromoteView(APIView):
     # 인증 실패/권한 실패 메시지를 명세대로 내려주기 위해 AllowAny + 시리얼라이저 검증 사용
@@ -780,7 +793,7 @@ class AdminPromoteView(APIView):
 
 # ─────────────────────────────────────────────────────────
 # 11. 관리자 권한 해제(강등) - 클래스형 뷰
-# POST /api/auth/admin/demote/
+# POST /api/admins/demote/
 # ─────────────────────────────────────────────────────────
 class AdminDemoteView(APIView):
     # 인증/권한 메시지를 명세대로 내려주기 위해 AllowAny + 시리얼라이저 검증 사용
@@ -847,7 +860,7 @@ class AdminDemoteView(APIView):
 
 # ─────────────────────────────────────────────────────────
 # 12. 회원 목록 조회 - 클래스형 뷰
-# GET /api/auth/users/
+# GET /api/admins/users/
 # ─────────────────────────────────────────────────────────
 class UserListView(APIView):
     # 커스텀 메시지(401/403)를 컨트롤하기 위해 AllowAny 사용 후 직접 체크
