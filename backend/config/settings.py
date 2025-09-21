@@ -14,6 +14,9 @@ from pathlib import Path
 from datetime import timedelta  # JWT 수명 설정에 사용
 import environ                  # .env 파일을 읽어 환경 변수로 파싱하는 라이브러리
 
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+
 # ───────────────── 기본 경로 ─────────────────
 # backend/ 폴더를 프로젝트의 기준 경로로 설정함
 # BASE_DIR = backend/
@@ -35,6 +38,7 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  #
 # 앱은 폴더 하나이며, 그 안에 models.py, views.py, urls.py, admin.py, migrations/ 등이 들어있다.
 # 앱을 쓰려면 settings.py의 INSTALLED_APPS에 등록해야 한다.
 # 앱은 보통 도메인 별로 나눈다. accounts(회원/권한), news(뉴스/콘텐츠), inquiries(문의), ...
+# INSTALLED_APPS에 새로운 앱을 추가하거나 models.py를 수정했을 시엔 다시 마이그레이션을 해야한다. -> 이땐 python manage.py migrate만 해주면된다.
 INSTALLED_APPS = [
     "django.contrib.admin",           # 관리자 사이트(/admin) 기능. 관리자 화면 쓰려면 필수
     "django.contrib.auth",            # 사용자/권한/인증 시스템. 로그인/로그아웃 등
@@ -155,23 +159,25 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # ───────────────── DRF / JWT ─────────────────
 # REST_FRAMEWORK => Django REST Framework(DRF)의 전역 기본 설정을 정의
-# DEFAULT_AUTHENTICATION_CLASSES => 어떤 인증 방식을 기본으로 쓸지 지정
-# "rest_framework_simplejwt.authentication.JWTAuthentication" => 로그인하면 발급되는 JWT 토큰을 이용해 인증
 
-# DEFAULT_PERMISSION_CLASSES => 권한(permissions) 의 기본 정책
-# "AllowAny" => 아무 권한 검사 안 하고 모든 요청 허용. (개발 초기 편의용) 
-# 따라서 실제 서비스 단계에선 바꿔줘야함 (IsAuthenticated → 로그인 사용자만 접근 가능, IsAdminUser → 관리자만 접근 가능)
+# 1. DEFAULT_AUTHENTICATION_CLASSES: 인증 클래스 전역 설정 => 요청이 들어왔을 때, 어떤 방식으로 인증할지를 정의
+# AccountsJWTAuthentication: 기본 JWTAuthentication 대신 직접 만든 인증 클래스(AccountsJWTAuthentication)를 사용. auth.py에 존재
+
+# 2. DEFAULT_PERMISSION_CLASSES: 권한 클래스 전역 설정 => 인증이 완료된 사용자에게 어떤 권한을 줄지를 정의
+# AllowAny: 아무 권한 검사 안 하고 모든 요청 허용. (개발 초기 편의용) 
+# 따라서 실제 서비스 단계에선 바꿔줘야함 (IsAuthenticated: 로그인 사용자만 접근 가능 / IsAdminUser: 관리자만 접근 가능)
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        'accounts.auth.AccountsJWTAuthentication',       
     ),
+
     # 개발 초기엔 열어두고, 뷰 단위로 잠그는 방식 권장
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
 }
 
-# (선택) JWT 토큰 수명 커스터마이즈
+# <(선택) JWT 토큰 수명 커스터마이즈>
 # SIMPLE_JWT => djangorestframework-simplejwt 패키지에서 JWT 토큰 관련 옵션을 지정
 # "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60) => 액세스 토큰(로그인 후 API 호출용)의 유효기간 = 60분 -> 짧아야 보안에 유리
 # "REFRESH_TOKEN_LIFETIME": timedelta(days=7) => 리프레시 토큰(엑세스 토큰 만료 시 새로 갱신받는 용도)의 유효기간 = 7일
@@ -187,9 +193,23 @@ REST_FRAMEWORK = {
 # 그리고 이때 프론트엔드(React)쪽에서 자동으로 갱신되게 구현해놨다면, 프론트가 알아서 리프레시 토큰을 사용해서 새로운 엑세스 토큰을 발급받는다.
 # 그럼 사용자는 60분이 지나도 계속해서 로그인 상태에 있을 수 있게된다.
 # 그러다 7일이 지나서 리프레시 토큰이 만료되면, 이때는 정말로 로그아웃 되고 다시 로그인 해야한다.
+
+# <SimpleJWT에서 사용자 식별자를 id에서 user_seq로 변경>
+# SimpleJWT는 기본적으로 User 모델의 PK 필드(id)를 기준으로 인증을 수행하고, JWT 토큰 Payload에 사용자 식별자를 저장할 때는 <"user_id": PK 필드 값> 으로 저장된다.
+# 따라서 SimpleJWT의 기본 설정을 따라가려면 User 모델의 PK 칼럼 이름을 "id"라고 지정을 해놔야한다.
+# 하지만 이 프로젝트의 User 모델의 PK 필드명은 "id"가 아니라 "user_seq" 이다.
+# 만약 기본 SimpleJWT 설정을 그대로 쓰면 DB 조회에는 존재하지도 않는 필드인 "id"가 쓰이게 된다.
+# 즉, 이대로라면 "id 필드를 기준으로 조회 시도 -> id는 실제 DB에 없으므로 인증 실패" 하게 된다.
+# 따라서 <'USER_ID_FIELD': 'user_seq'>를 통해 SimpleJWT가 DB에서 User 객체를 조회할 때 어떤 필드를 사용할지 직접 지정해줘야한다.
+# 그리고 USER_ID_FIELD를 user_seq로 지정했으므로 USER_ID_CLAIM도 user_seq로 지정한다.
+# 여기서 "ACCESS_TOKEN_LIFETIME", "REFRESH_TOKEN_LIFETIME", 'USER_ID_FIELD', 'USER_ID_CLAIM' 등은 SimpleJWT 라이브러리 내부에서 미리 정해져 있는 고정된 이름이다.
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    
+    # 이 두개의 키의 값은 반드시 'user_seq'로 동일해야 한다.
+    'USER_ID_FIELD': 'user_seq',   # DB 조회에 쓸 필드
+    'USER_ID_CLAIM': 'user_seq',   # 토큰의 Payload에 어떤 필드를 사용자 식별자를 저장할지 결정
 }
 
 # ───────────────── CORS / CSRF ─────────────────
