@@ -67,6 +67,9 @@ class User(models.Model):
     # 비밀번호 해시
     password_hash = models.CharField(max_length=255, db_column="PASSWORD_HASH")
 
+    # 새 필드 추가
+    password_changed_at = models.DateTimeField(null=True, blank=True, default=None)
+
     # 성별: M/F (기본값 강제하지 않음 → 반드시 선택/입력하도록)
     gender = models.CharField(
         max_length=1, 
@@ -93,6 +96,15 @@ class User(models.Model):
 
     # 회원 정보 수정 일시
     updated_at = models.DateTimeField(null=True, blank=True, db_column="UPDATED_AT")
+
+    # DRF/Django 권한체크가 기대하는 최소한의 인터페이스
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
 
     class Meta:
         db_table = "T_USER"
