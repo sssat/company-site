@@ -1,37 +1,61 @@
+from django.conf import settings
+from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
-from django.conf import settings
-from .models import User
 
+from .models import User
+        
 # AccountsJWTAuthentication: 커스텀 JWT 인증 클래스를 정의한 것
 # SimpleJWT의 기본 인증 클래스인 JWTAuthentication을 확장(상속)하여, JWT 인증 절차는 기본 로직을 그대로 사용하고
 # get_user()만 오버라이드해서 내 프로젝트의 유저 식별 방식(user_seq)에 맞게 토큰을 처리하도록 만듦
 class AccountsJWTAuthentication(JWTAuthentication):
+    """
+    - SimpleJWT 기본 인증을 따르되, get_user만 커스터마이징
+    - USER_ID_CLAIM(기본: user_seq)로 유저 식별
+    - 비밀번호 변경 시각(password_changed_at) 이후 발급된 토큰만 유효하도록 차단
+    """
+
     def get_user(self, validated_token):
+        # 1) 사용자 식별 클레임 이름 결정 (기본: "user_seq")
+        simple_jwt_cfg = getattr(settings, "SIMPLE_JWT", {}) or {}
+        user_id_claim = simple_jwt_cfg.get("USER_ID_CLAIM", "user_seq")
 
-        # settings.py의 SIMPLE_JWT 설정에서 USER_ID_CLAIM 값을 가져옴 -> 없으면 기본값 "user_seq"를 사용
-        claim = settings.SIMPLE_JWT.get("USER_ID_CLAIM", "user_seq")
-
-        # 토큰의 Payload에서 user_seq 값 꺼내기
-        # validated_token: 이미 서명 검증과 만료 체크가 끝난 JWT Payload -> 파이썬 딕셔너리처럼 동작
-        # print(validated_token) = 
-        # {
-        #     "token_type": "access",
-        #     "exp": 1726804800,
-        #     "iat": 1726801200,
-        #     "jti": "3d87bb21-7c90-4d91-9ef0-02eaa682111c",
-        #     "user_seq": 15,
-        #     "user_id": "hong123" -> 이건 로그인 뷰에서 RefreshToken 생성 후 추가 클레임을 수동으로 넣어서 들어가있음
-        # }
-        # 여기에서 "user_seq" 키를 꺼냄 -> 만약 "user_seq"가 없으면 KeyError가 발생하고 InvalidToken 예외를 던짐
+        # 2) 토큰에서 식별자 추출
         try:
-            user_seq = validated_token[claim]
+            user_seq = validated_token[user_id_claim]
         except KeyError:
             raise InvalidToken("Token missing user identification claim.")
 
-        # DB에서 해당 유저 찾기
-        # 추출한 user_seq로 DB에서 User 모델을 조회 -> 없으면 AuthenticationFailed 예외를 발생시켜 401 응답을 반환
+        # 3) 유저 조회
         try:
-            return User.objects.get(user_seq=user_seq)
+            user = User.objects.get(user_seq=user_seq)
         except User.DoesNotExist:
             raise AuthenticationFailed("User not found.", code="user_not_found")
+
+        # (선택) 비활성 계정 차단
+        if hasattr(user, "is_active") and not bool(user.is_active):
+            raise AuthenticationFailed("User inactive or deleted.", code="user_inactive")
+
+        # 4) 비밀번호 변경 이후 토큰 무효화 로직
+        #    - 토큰의 iat(issued-at, epoch seconds) < user.password_changed_at 이면 거부
+        pwd_changed_at = getattr(user, "password_changed_at", None)
+        if pwd_changed_at:
+            iat = validated_token.get("iat")
+            if iat is None:
+                # iat가 없는 토큰은 정책상 거부 (보수적으로 처리)
+                raise InvalidToken("Token is missing 'iat' claim.")
+            try:
+                iat_sec = int(iat)
+            except (TypeError, ValueError):
+                raise InvalidToken("Token 'iat' claim is invalid.")
+
+            # password_changed_at을 epoch seconds로 변환하여 비교
+            changed_sec = int(pwd_changed_at.timestamp())
+            if iat_sec < changed_sec:
+                # 비밀번호 변경 이후 발급된 토큰만 허용
+                raise AuthenticationFailed(
+                    "Token invalidated by password change.",
+                    code="token_invalidated",
+                )
+
+        return user
