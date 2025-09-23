@@ -10,12 +10,10 @@
 # => 비동기(Asynchronous) + 동기 둘 다 지원, 실시간 서비스(WebSocket), 채팅, 스트리밍, 동시성 처리에 강점
 # 둘 다 배포할 때 쓰는 파일이고 서비스 성격에 따라 보통은 둘 중 하나만 쓴다. 그래서 회사소개 홈페이지 처럼 단순 HTTP 서비스라면 배포 시 wsgi.py만 사용한다.
 
+import os
 from pathlib import Path        
 from datetime import timedelta  # JWT 수명 설정에 사용
 import environ                  # .env 파일을 읽어 환경 변수로 파싱하는 라이브러리
-
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
 
 # ───────────────── 기본 경로 ─────────────────
 # backend/ 폴더를 프로젝트의 기준 경로로 설정함
@@ -32,6 +30,25 @@ SECRET_KEY = env("SECRET_KEY")  # 장고의 암호화·서명에 쓰이는 프�
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # 장고가 요청 Host 헤더를 검증할 때 허용할 도메인/IP 목록
 
+# ───────── Email (Gmail SMTP) ─────────
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+# TLS 권장 (587)
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+
+EMAIL_HOST_USER = env("GMAIL_USER")          # ex) yourid@gmail.com
+EMAIL_HOST_PASSWORD = env("GMAIL_APP_PASS")  # 구글 '앱 비밀번호' (일반 비번 아님)
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+EMAIL_TIMEOUT = 15  # (선택) 타임아웃 보강
+
+# ───────── 프론트 URL(메일 링크용) ─────────
+FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173")
+PASSWORD_RESET_PATH = env("PASSWORD_RESET_PATH", default="/reset-password")
+
 # ───────────────── 앱 등록 ─────────────────
 # Django에 “이 프로젝트에서 사용할 앱 목록”을 등록
 # Django에서 앱(App) 은 프로젝트 안의 기능 단위 모듈(패키지)이다. -> 프로젝트는 여러 앱으로 쪼개진다.
@@ -46,7 +63,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",        # 세션(서버 측 로그인 상태 저장) 기능
     "django.contrib.messages",        # 1회성 메시지(플래시 메시지) 프레임워크
     "django.contrib.staticfiles",     # 정적 파일(CSS/JS/이미지같은 코드가 아닌 리소스) 관리 -> 여기저기 흩어진 CSS/JS/이미지들을, 배포할 때 한 폴더에 깔끔하게 모아주는 역할
-
+    
     # 서드파티(3rd-party) => 서드파티는 Django가 만든 게 아니라 외부 커뮤니티/회사에서 만든 패키지
     "rest_framework",   # API 서버 만들 때 쓰는 도구
     "corsheaders",      # CORS(다른 출처(origin)에서 오는 요청을 허용할지/막을지 정하는 웹브라우저의 보안 규칙) 헤더를 추가/관리하는 미들웨어를 제공 -> 프론트(React, http://localhost:5173)랑 백엔드(Django, http://localhost:8000)가 포트가 달라서 서로 통신을 못하는데 corsheaders 얘를 쓰면 허용해줌.
@@ -206,6 +223,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+
+    "AUTH_HEADER_TYPES": ("Bearer",),
     
     # 이 두개의 키의 값은 반드시 'user_seq'로 동일해야 한다.
     'USER_ID_FIELD': 'user_seq',   # DB 조회에 쓸 필드
@@ -221,6 +240,22 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+]
+
+# refresh 쿠키를 쓰므로 cred 허용
+CORS_ALLOW_CREDENTIALS = True
+
+# 프리플라이트에서 허용할 헤더(로그인/일반 JSON 요청에 필요)
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # 세션 기반 로그인(쿠키 사용)에서는, 악성 사이트가 사용자의 브라우저를 속여 Django에 요청을 보내는 공격이 가능 → CSRF 공격
