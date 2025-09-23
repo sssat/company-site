@@ -72,6 +72,7 @@ export interface FindPasswordRequest {
 }
 export interface FindPasswordResponse {
   message: string;
+  temp_password: string; 
 }
 
 /** 로그아웃 */
@@ -112,7 +113,7 @@ export interface DemoteResponse {
 }
 
 /* ────────────── 상수 ────────────── */
-const BASE = import.meta.env.VITE_API_BASE as string;
+const BASE = (import.meta.env.VITE_API_BASE as string) ?? "";
 
 /* ────────────── 인증 플로우 ────────────── */
 /** 로그인: refresh 쿠키 심기 + access 메모리 세팅 */
