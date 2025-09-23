@@ -765,6 +765,7 @@ class FindPasswordRequestSerializer(serializers.Serializer):
 # ─────────────────────────────────────────────────────────
 class FindPasswordResponseSerializer(serializers.Serializer):
     message = serializers.CharField(allow_blank=True, read_only=True)
+    temp_password = serializers.CharField(required=False)   # 서버에서 새로 발급한 임시 비밀번호
 
 
 # ─────────────────────────────────────────────────────────
@@ -805,7 +806,7 @@ class ChangePasswordRequestSerializer(serializers.Serializer):
         if curr == new:
             raise serializers.ValidationError({"message": self.error_messages["same_password"]})
         
-        # ✅ 4) 회원가입과 동일한 보안 규칙 적용
+        # 4) 회원가입과 동일한 보안 규칙 적용
         violations = validate_password_policy(new, user_id=getattr(user, "user_id", None))
         if violations:
             # 회원가입과 동일 포맷으로 리턴 (키명 통일 권장: "new_password")
