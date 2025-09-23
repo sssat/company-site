@@ -645,6 +645,7 @@ class LoginResponseSerializer(serializers.Serializer):
     user_seq = serializers.IntegerField(min_value=1, read_only=True)   # PK -> 1 이상
     user_id = serializers.CharField(max_length=50, read_only=True)
     message = serializers.CharField(read_only=True, allow_blank=True)
+    user_name = serializers.CharField() # 추가 <- 헤더 파일에서 로그인 시 OOO님 이라고 표시하기 위함
 
 
 # ─────────────────────────────────────────
