@@ -41,11 +41,12 @@
 # 즉, views.py 전체 파일을 통째로 뷰라고 부르는 것이 아니라, 각 엔드포인트를 처리하는 개별 클래스나 함수를 뷰라고 부른다.
 # ─────────────────────────────────────────────────────────────────────────────
 
+import secrets
+import string
 from typing import Any, Dict, List
 from django.core import signing
 from .models import User, UserLevel
 from django.contrib.auth.hashers import make_password
-from django.core.exceptions import FieldError
 import math
 
 # Django 프로젝트의 설정값을 코드에서 사용하기 위해 가져옴
@@ -480,6 +481,7 @@ class LoginView(APIView):
             "user_seq": getattr(user, "user_seq"),
             "user_id": getattr(user, "user_id"),
             "role": self._map_role(user),
+            "user_name": user.user_name,  # 추가 <- 헤더 파일에서 로그인 시 OOO님 이라고 표시하기 위함
         }
 
         # 5) Refresh 토큰을 HttpOnly 쿠키로 설정(선택)
@@ -608,77 +610,108 @@ class FindIdView(APIView):
 
 
 # ─────────────────────────────────────────────────────────
-# 8. 비밀번호 찾기 - 클래스형 뷰
+# 8. 비밀번호 찾기 - 클래스형 뷰 (임시 비밀번호 발급 방식)
 # POST /api/auth/find-password/
 # ─────────────────────────────────────────────────────────
 class FindPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
 
-    # 재설정 링크(프론트) 기본값을 settings에서 가져오되 없으면 폴백
-    def _reset_base_url(self) -> str:
-        # 예: settings.PASSWORD_RESET_URL = "https://your-frontend.com/reset-password"
-        return (
-            getattr(settings, "PASSWORD_RESET_URL", None)
-            or getattr(settings, "FRONTEND_RESET_URL", None)
-            or "/reset-password"
-        )
+    @staticmethod
+    def _gen_temp_password(length: int = 10) -> str:
+        alphabet = string.ascii_letters + string.digits
+        return "".join(secrets.choice(alphabet) for _ in range(length))
+
+    def _frontend_base(self, request) -> str:
+        base = getattr(settings, "FRONTEND_BASE_URL", None)
+        if base:
+            return base.rstrip("/")
+        return request.build_absolute_uri("/").rstrip("/")
 
     def post(self, request, *args, **kwargs):
-        # 파싱/미디어타입 오류 -> 400
+        # 1) 요청 파싱
         try:
             data = request.data
-        except (ParseError, UnsupportedMediaType):
+        except ParseError:
             return Response({"message": "잘못된 요청입니다."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # 유효성 검증 (존재하지 않으면 시리얼라이저에서 NotFound)
-        serializer = FindPasswordRequestSerializer(data=data)
+        # 2) 유효성 검증 및 사용자 resolve
+        s = FindPasswordRequestSerializer(data=data)
         try:
-            serializer.is_valid(raise_exception=True)
+            s.is_valid(raise_exception=True)
         except NotFound as nf:
             detail = getattr(nf, "detail", {})
-            # 시리얼라이저가 {"message": "..."} 형태로 넣어줌
-            return Response(detail if isinstance(detail, dict) else {"message": "가입되지 않은 사용자입니다."},
+            return Response(detail if isinstance(detail, dict)
+                            else {"message": "가입되지 않은 사용자입니다."},
                             status=status.HTTP_404_NOT_FOUND)
         except ValidationError as exc:
             return Response({"errors": exc.detail},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # 성공 시: 재설정 토큰 발급 + 메일 발송
-        user = serializer.validated_data["user"]
+        user = s.validated_data["user"]
 
-        # 1) 재설정 토큰 생성 (서명 토큰)
-        #    payload 예시: {"sub": user_seq, "uid": user_id}
-        #    검증 시: signing.loads(token, salt="pwreset", max_age=1800)  # 30분 권장
-        token = signing.dumps({"sub": user.user_seq, "uid": user.user_id}, salt="pwreset")
+        # 이메일이 있어야 발송 가능
+        if not getattr(user, "email", None):
+            return Response({"message": "가입된 이메일이 없습니다."},
+                            status=status.HTTP_404_NOT_FOUND)
 
-        # 2) 재설정 링크 구성
-        base = self._reset_base_url().rstrip("/")
-        reset_link = f"{base}?token={token}"
+        # 3) 임시 비밀번호 생성
+        temp_password = self._gen_temp_password(10)
 
-        # 3) 메일 발송 (Email backend 설정 필요)
-        #    settings.DEFAULT_FROM_EMAIL, EMAIL_BACKEND 등이 설정되어 있어야 실제 발송됨
-        subject = "[비밀번호 재설정 안내]"
-        msg = (
-            "비밀번호 재설정을 요청하셨습니다.\n\n"
-            f"아래 링크를 통해 비밀번호를 재설정하세요 (유효기간 30분):\n{reset_link}\n\n"
-            "본 요청을 본인이 하지 않았다면 이 메일을 무시하세요."
+        # 4) 메일 본문 구성(로그인/비번변경 경로는 선택)
+        base_url = self._frontend_base(request)
+        login_url = f"{base_url}/login"
+
+        subject = "[마켓스테이지] 임시 비밀번호 안내"
+        body = (
+            "비밀번호 재설정을 요청하셔서 임시 비밀번호를 발급했습니다.\n\n"
+            f"임시 비밀번호: {temp_password}\n\n"
+            f"아래 링크로 로그인 후 반드시 비밀번호를 변경해 주세요.\n"
+            f"- 로그인: {login_url}\n"
+            "본 요청을 본인이 하지 않았다면 이 메일을 무시하고, 필요 시 고객센터에 문의해 주세요."
         )
+
+        # 5) DB 저장 + 메일 발송 (메일 실패 시 롤백)
         try:
-            send_mail(
-                subject=subject,
-                message=msg,
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
-        except Exception:
-            # 메일 서버/환경 문제 등 -> 필요 시 500으로 분기
-            return Response({"message": "서버 내부 오류가 발생했습니다."},
+            with transaction.atomic():
+                update_fields = []
+
+                # 프로젝트별 컬럼명 대응 (password_hash 우선, 없으면 password)
+                if hasattr(user, "password_hash"):
+                    user.password_hash = make_password(temp_password)
+                    update_fields.append("password_hash")
+                elif hasattr(user, "password"):
+                    user.password = make_password(temp_password)
+                    update_fields.append("password")
+                else:
+                    # 마지막 안전장치(대부분 필요 없음)
+                    user.password = make_password(temp_password)
+                    update_fields.append("password")
+
+                # 비번 변경 시각 필드가 있다면 같이 업데이트
+                if hasattr(user, "password_changed_at"):
+                    user.password_changed_at = timezone.now()
+                    update_fields.append("password_changed_at")
+
+                user.save(update_fields=update_fields)
+
+                send_mail(
+                    subject=subject,
+                    message=body,
+                    from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+        except Exception as e:
+            return Response({"message": f"메일 발송 중 오류가 발생했습니다: {str(e)}"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # 200: 성공 메시지
-        res = FindPasswordResponseSerializer({"message": "비밀번호 재설정 메일을 발송했습니다."}).data
+        # 6) 응답 (개발모드에서만 임시 비번 회신)
+        payload = {"message": "임시 비밀번호를 이메일로 발송했습니다."}
+        if getattr(settings, "DEBUG", False):
+            payload["temp_password"] = temp_password
+
+        res = FindPasswordResponseSerializer(payload).data
         return Response(res, status=status.HTTP_200_OK)
 
 
@@ -686,38 +719,33 @@ class FindPasswordView(APIView):
 # 9. 비밀번호 변경 - 클래스형 뷰
 # POST /api/auth/change-password/
 # ─────────────────────────────────────────────────────────
+
 class ChangePasswordView(APIView):
-    authentication_classes = [AccountsJWTAuthentication]      # 커스텀 JWT 인증
-    permission_classes = [permissions.IsAuthenticated]        # 인증 필수
+    authentication_classes = [AccountsJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        # 1) 요청 데이터 유효성 검증 (현재 비밀번호 확인 포함)
-        s = ChangePasswordRequestSerializer(
-            data=request.data,
-            context={"user": request.user},
-        )
+        s = ChangePasswordRequestSerializer(data=request.data, context={"user": request.user})
         s.is_valid(raise_exception=True)
 
-        # 2) 시리얼라이저에서 가져온 user, 새 비밀번호로 DB 업데이트
         user = s.validated_data["user"]
         new_pw = s.validated_data["new_password"]
-
         user.password_hash = make_password(new_pw)
-        user.save(update_fields=["password_hash"])
+        user.password_changed_at = timezone.now()          # ← 추가
+        user.save(update_fields=["password_hash", "password_changed_at"])
 
-        # 3) 응답 준비
         resp = Response(
-            ChangePasswordResponseSerializer(
-                {"message": "비밀번호가 변경되었습니다."}
-            ).data,
-            status=status.HTTP_200_OK
+            {"message": "비밀번호가 변경되었습니다. 다시 로그인하세요."},
+            status=status.HTTP_200_OK,
         )
-
-        # 4) 리프레시 토큰 쿠키 삭제 (블랙리스트 미사용 → 쿠키 삭제만)
-        if request.COOKIES.get("refresh"):
-            resp.delete_cookie("refresh", path="/api/auth/")
-
+        resp.delete_cookie(
+            key="refresh",
+            path="/api/auth/",
+            domain=getattr(settings, "SESSION_COOKIE_DOMAIN", None),
+            samesite=getattr(settings, "SESSION_COOKIE_SAMESITE", "Lax"),
+        )
         return resp
+
 
 
 # ─────────────────────────────────────────────────────────
