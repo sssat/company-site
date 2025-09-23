@@ -3,14 +3,14 @@
 # 2. urls.py: 프로젝트 전역 URL 라우팅을 관리한다.
 # 3. wsgi.py: WSGI(Web Server Gateway Interface) 서버용 진입점 파일
 # 4. asgi.py: ASGI(Asynchronous Server Gateway Interface) 서버용 진입점 파일
-# 5. wsgi.py vs asgi.py 차이점
+
+# <wsgi.py vs asgi.py 차이점>
 # (1) wsgi.py
 # => 동기(Synchronous) 전용, 일반 웹 요청(HTTP), 전통적인 방식, 안정적
 # (2) asgi.py
 # => 비동기(Asynchronous) + 동기 둘 다 지원, 실시간 서비스(WebSocket), 채팅, 스트리밍, 동시성 처리에 강점
 # 둘 다 배포할 때 쓰는 파일이고 서비스 성격에 따라 보통은 둘 중 하나만 쓴다. 그래서 회사소개 홈페이지 처럼 단순 HTTP 서비스라면 배포 시 wsgi.py만 사용한다.
 
-import os
 from pathlib import Path        
 from datetime import timedelta  # JWT 수명 설정에 사용
 import environ                  # .env 파일을 읽어 환경 변수로 파싱하는 라이브러리
@@ -26,27 +26,38 @@ env = environ.Env(DEBUG=(bool, True))
 environ.Env.read_env(BASE_DIR / ".env")
 
 # ───────────────── 보안/디버그/호스트 ─────────────────
-SECRET_KEY = env("SECRET_KEY")  # 장고의 암호화·서명에 쓰이는 프로젝트 고유 키
+SECRET_KEY = env("SECRET_KEY")  # 장고의 암호화/서명에 쓰이는 프로젝트 고유 키
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # 장고가 요청 Host 헤더를 검증할 때 허용할 도메인/IP 목록
 
-# ───────── Email (Gmail SMTP) ─────────
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# ───────── Email (Naver SMTP) ─────────
+# <SMTP란?>
+# 이메일을 보내기 위한 표준 프로토콜
+# 이메일 발송만 담당 (수신은 IMAP/POP3가 담당)
+# 포트는 465(SSL 기반 SMTP, 네이버 기본값), 587(TLS 기반 SMTP, Gmail 주로 사용)를 주로 사용
+# 유저(클라이언트) -> 백엔드(내 Django 서버) -> SMTP 서버(smtp.naver.com(네이버) / smtp.googel.com(구글)) -> 수신자 메일 서버(gmail.com / naver.com)
 
-# TLS 권장 (587)
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"   # Django가 어떤 방식으로 이메일을 보낼지 결정하는 설정 -> SMTP 프로토콜을 사용하겠다는 의미
+ 
+EMAIL_HOST = "smtp.naver.com"    # 사용할 SMTP 서버의 주소 -> 네이버 SMTP 서버 주소
+EMAIL_PORT = 465                 # SMTP 서버와 통신할 때 사용할 포트 번호
+EMAIL_USE_SSL = True             # 네이버는 SSL을 사용하므로 True로 설정
+EMAIL_USE_TLS = False            # TLS 사용 안 함 (SSL과 TLS는 동시에 켤 수 없음)
 
-EMAIL_HOST_USER = env("GMAIL_USER")          # ex) yourid@gmail.com
-EMAIL_HOST_PASSWORD = env("GMAIL_APP_PASS")  # 구글 '앱 비밀번호' (일반 비번 아님)
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-EMAIL_TIMEOUT = 15  # (선택) 타임아웃 보강
+EMAIL_HOST_USER = env("NAVER_USER")          # Django가 네이버 SMTP 서버에 로그인할 때 사용하는 계정
+EMAIL_HOST_PASSWORD = env("NAVER_APP_PASS")  # 네이버 앱 비밀번호 (2단계 인증 시 필요)
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER         # Django가 메일 보낼 때 사용자에게 보이는 발신자 메일 주소 
+EMAIL_TIMEOUT = 15                           # SMTP 서버와 연결할 때 응답 대기 시간(초 단위) -> 15초 안에 응답이 없으면 TimeoutError 발생 -> 서버가 멈추지 않도록 안전장치 역할
 
 # ───────── 프론트 URL(메일 링크용) ─────────
-FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173")
+
+# 사용자가 메일로 온 비밀번호 재설정 링크를 클릭하면 열리게 될 웹사이트(프론트) 주소를 설정
+# .env 파일에 값이 있으면 그걸 사용하고, 없으면 http://127.0.0.1:5173을 기본값으로 사용
+FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173") 
+
+# 비밀번호 재설정 페이지의 경로
+# .env에 값이 없으면 "/reset-password"를 기본값으로 사용
+# PASSWORD_RESET_PATH 링크는 FRONTEND_BASE_URL 뒤에 붙여져서 최종 완성된다.
 PASSWORD_RESET_PATH = env("PASSWORD_RESET_PATH", default="/reset-password")
 
 # ───────────────── 앱 등록 ─────────────────
@@ -81,7 +92,7 @@ INSTALLED_APPS = [
 # 전체 흐름
 # 1. 브라우저 요청(Request) 이 서버(Django)에 도착
 # 2. MIDDLEWARE 리스트에 나열된 “필터”들을 위에서 아래로 통과
-# 3. 요청이 urls.py → views.py 로 넘어가서 실제 로직 실행
+# 3. 요청이 urls.py -> views.py 로 넘어가서 실제 로직 실행
 # 4. views.py가 반환한 응답(Response)이 다시 미들웨어를 아래에서 위로 거쳐 나감
 # 5. 최종적으로 브라우저에 응답이 도착
 
@@ -131,7 +142,7 @@ TEMPLATES = [
 # 1. 웹 서버가 클라이언트의 요청을 받음
 # 2. 웹 서버가 WSGI를 통해 Django로 요청을 전달
 # 3. Django가 요청을 처리한 후 응답을 생성
-# 4. WSGI가 그 응답을 다시 웹 서버에 전달 → 최종적으로 클라이언트에게 응답
+# 4. WSGI가 그 응답을 다시 웹 서버에 전달 -> 최종적으로 클라이언트에게 응답
 
 # WSGI_APPLICATION은 Django에게 "외부에서 요청이 들어오면 내 프로젝트를 실행할 출발점(입구) 은 여기" 라고 알려주는 설정
 WSGI_APPLICATION = "config.wsgi.application"  # WSGI 진입점(입구): config/wsgi.py 파일 안의 application 객체
@@ -146,7 +157,7 @@ DATABASES = {
 
 # ───────────────── 비밀번호 정책 ─────────────────
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},  # 사용자 정보(아이디, 이메일, 이름 등)와 비슷한 비밀번호를 막음 (예: 아이디가 hong123인데 비번을 hong123! → 거부)
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},  # 사용자 정보(아이디, 이메일, 이름 등)와 비슷한 비밀번호를 막음 (예: 아이디가 hong123인데 비번을 hong123! -> 거부)
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},            # 비밀번호가 너무 짧으면 거부 (기본값: 최소 8자)
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},           # 전 세계적으로 흔한 비밀번호(123456, password, qwerty 등)를 거부
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"}           # 비밀번호가 숫자만 있으면 거부
@@ -171,7 +182,7 @@ STATIC_URL = "static/"   # 브라우저가 정적 파일에 접근할 때 사용
 # 대신 collectstatic으로 STATIC_ROOT에 파일을 모아두고, 웹 서버가 /static/ URL 요청을 STATIC_ROOT 폴더에서 직접 서빙
 
 # 배포용 폴더 경로 -> 따라서 배포 하지 않을거라면 이 코드는 필요없다.
-# python manage.py collectstatic 명령어를 실행하면, 각 앱(app_name/static/…)에 흩어져 있는 모든 정적 파일을 하나로 모아서(collect) → BASE_DIR/staticfiles/ 안에 저장
+# python manage.py collectstatic 명령어를 실행하면, 각 앱(app_name/static/…)에 흩어져 있는 모든 정적 파일을 하나로 모아서(collect) -> BASE_DIR/staticfiles/ 안에 저장
 STATIC_ROOT = BASE_DIR / "staticfiles"      
 
 # ───────────────── DRF / JWT ─────────────────
@@ -258,7 +269,7 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
 ]
 
-# 세션 기반 로그인(쿠키 사용)에서는, 악성 사이트가 사용자의 브라우저를 속여 Django에 요청을 보내는 공격이 가능 → CSRF 공격
+# 세션 기반 로그인(쿠키 사용)에서는, 악성 사이트가 사용자의 브라우저를 속여 Django에 요청을 보내는 공격이 가능 -> CSRF 공격
 # CSRF_TRUSTED_ORIGINS에 안전하다고 믿을 수 있는 프론트 주소를 등록해 두면, Django가 그 출처에서 오는 요청을 CSRF 검증 대상으로 인정함. -> 즉, “이 출처에서 오는 폼/세션 요청은 믿을 수 있어” 라고 Django에 알려주는 설정
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
