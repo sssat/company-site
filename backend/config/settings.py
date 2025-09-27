@@ -14,6 +14,8 @@
 from pathlib import Path        
 from datetime import timedelta  # JWT 수명 설정에 사용
 import environ                  # .env 파일을 읽어 환경 변수로 파싱하는 라이브러리
+import os
+
 
 # ───────────────── 기본 경로 ─────────────────
 # backend/ 폴더를 프로젝트의 기준 경로로 설정함
@@ -59,6 +61,13 @@ FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173")
 # .env에 값이 없으면 "/reset-password"를 기본값으로 사용
 # PASSWORD_RESET_PATH 링크는 FRONTEND_BASE_URL 뒤에 붙여져서 최종 완성된다.
 PASSWORD_RESET_PATH = env("PASSWORD_RESET_PATH", default="/reset-password")
+
+# ───────────────── AWS ─────────────────
+AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
+AWS_S3_BUCKET = os.environ["AWS_S3_BUCKET"]  # 필수
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN", "").strip()
 
 # ───────────────── 앱 등록 ─────────────────
 # Django에 “이 프로젝트에서 사용할 앱 목록”을 등록
