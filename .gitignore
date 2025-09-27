@@ -15,6 +15,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # ----- Environment files (모든 하위폴더 포함) -----
+frontend/.env*
+backend/.env*
 **/.env*
 !**/.env.example
 
