@@ -631,25 +631,8 @@ class LoginRequestSerializer(serializers.Serializer):
         return attrs
 
 
-# ─────────────────────────────────────────────────────────
-# 8. 로그인 - response 시리얼라이저
-# 수행 기능: 직렬화
-# ─────────────────────────────────────────────────────────
-class LoginResponseSerializer(serializers.Serializer):
-    # JWT는 반드시 비어있지 않아야 함
-    access = serializers.CharField(read_only=True, allow_blank=False)
-
-    # 서버가 정한 역할만 내려줌(입력 받지 않음)
-    role = serializers.ChoiceField(choices=["USER", "ADMIN", "SUPER_ADMIN"], read_only=True)
-
-    user_seq = serializers.IntegerField(min_value=1, read_only=True)   # PK -> 1 이상
-    user_id = serializers.CharField(max_length=50, read_only=True)
-    message = serializers.CharField(read_only=True, allow_blank=True)
-    user_name = serializers.CharField() # 추가 <- 헤더 파일에서 로그인 시 OOO님 이라고 표시하기 위함
-
-
 # ─────────────────────────────────────────
-# 9. 엑세스 토큰 갱신 - response 시리얼라이저
+# 8. 엑세스 토큰 갱신 - response 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────
 class TokenRefreshResponseSerializer(serializers.Serializer):
@@ -661,7 +644,7 @@ class TokenRefreshResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────
-# 10. 로그아웃 - response 시리얼라이저
+# 9. 로그아웃 - response 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────
 class LogoutResponseSerializer(serializers.Serializer):
@@ -669,7 +652,7 @@ class LogoutResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 11. 아이디 찾기 - request 시리얼라이저
+# 10. 아이디 찾기 - request 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────
 class FindIdRequestSerializer(serializers.Serializer):
@@ -708,7 +691,7 @@ class FindIdRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 12. 아이디 찾기 - response 시리얼라이저
+# 11. 아이디 찾기 - response 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────
 class FindIdResponseSerializer(serializers.Serializer):
@@ -727,7 +710,7 @@ class FindIdResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 13. 비밀번호 찾기 - requset 시리얼라이저
+# 12. 비밀번호 찾기 - requset 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────
 class FindPasswordRequestSerializer(serializers.Serializer):
@@ -760,7 +743,7 @@ class FindPasswordRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 14. 비밀번호 찾기 - response 시리얼라이저
+# 13. 비밀번호 찾기 - response 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────
 class FindPasswordResponseSerializer(serializers.Serializer):
@@ -769,7 +752,7 @@ class FindPasswordResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 15. 비밀번호 변경 - request 시리얼라이저
+# 14. 비밀번호 변경 - request 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────
 class ChangePasswordRequestSerializer(serializers.Serializer):
@@ -817,15 +800,7 @@ class ChangePasswordRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 16. 비밀번호 변경 - response 시리얼라이저
-# 수행 기능: 직렬화
-# ─────────────────────────────────────────────────────────
-class ChangePasswordResponseSerializer(serializers.Serializer):
-    message = serializers.CharField(allow_blank=True, read_only=True)
-
-
-# ─────────────────────────────────────────────────────────
-# 17. 관리자 권한 부여(승격) - request 시리얼라이저
+# 15. 관리자 권한 부여(승격) - request 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────
 class AdminPromoteRequestSerializer(serializers.Serializer):
@@ -868,7 +843,7 @@ class AdminPromoteRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 18. 관리자 권한 부여(승격) - response 시리얼라이저
+# 16. 관리자 권한 부여(승격) - response 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────
 class AdminPromoteResponseSerializer(serializers.Serializer):
@@ -883,7 +858,7 @@ class AdminPromoteResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 19. 관리자 권한 해제(강등) - request 시리얼라이저
+# 17. 관리자 권한 해제(강등) - request 시리얼라이저
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────
 class AdminDemoteRequestSerializer(serializers.Serializer):
@@ -924,7 +899,7 @@ class AdminDemoteRequestSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 20. 관리자 권한 해제(강등) - response 시리얼라이저
+# 18. 관리자 권한 해제(강등) - response 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────
 class AdminDemoteResponseSerializer(serializers.Serializer):
@@ -938,7 +913,7 @@ class AdminDemoteResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 21. 회원 목록 조회 - response 전용 시리얼라이저
+# 19. 회원 목록 조회 - response 전용 시리얼라이저
 # 수행 기능: 직렬화
 # ─────────────────────────────────────────────────────────
 
