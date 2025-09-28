@@ -29,7 +29,12 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 # ───────────────── 보안/디버그/호스트 ─────────────────
 SECRET_KEY = env("SECRET_KEY")  # 장고의 암호화/서명에 쓰이는 프로젝트 고유 키
-DEBUG = env("DEBUG")
+
+# True -> 개발 모드
+# False -> 운영 모드
+# True일 때는 오류 페이지가 상세하게 표시되지만 보안상 위험. 운영 서버에서는 반드시 DEBUG=False로 변경 해야한다.
+DEBUG=True
+
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # 장고가 요청 Host 헤더를 검증할 때 허용할 도메인/IP 목록
 
 # ───────── Email (Naver SMTP) ─────────
@@ -52,7 +57,6 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER         # Django가 메일 보낼 때 사�
 EMAIL_TIMEOUT = 15                           # SMTP 서버와 연결할 때 응답 대기 시간(초 단위) -> 15초 안에 응답이 없으면 TimeoutError 발생 -> 서버가 멈추지 않도록 안전장치 역할
 
 # ───────── 프론트 URL(메일 링크용) ─────────
-
 # 사용자가 메일로 온 비밀번호 재설정 링크를 클릭하면 열리게 될 웹사이트(프론트) 주소를 설정
 # .env 파일에 값이 있으면 그걸 사용하고, 없으면 http://127.0.0.1:5173을 기본값으로 사용
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173") 
@@ -63,11 +67,14 @@ FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173")
 PASSWORD_RESET_PATH = env("PASSWORD_RESET_PATH", default="/reset-password")
 
 # ───────────────── AWS ─────────────────
-AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
-AWS_S3_BUCKET = os.environ["AWS_S3_BUCKET"]  # 필수
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
-CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN", "").strip()
+# S3: 저장소(Storage) 역할 -> 이미지 데이터가 여기 저장됨
+# CloudFront: S3에 저장된 파일을 전세계 엣지 서버에 캐싱하여 가까운 위치에서 빠르게 제공하는 서비스
+# 이 값들은 .env에 존재
+AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")               # S3 버킷이 위치한 AWS 리전 => ap-northeast-2 (서울)
+AWS_S3_BUCKET = os.environ["AWS_S3_BUCKET"]                          # 사용할 S3 버킷 이름 => company-site-media
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")          # AWS API 접근용 아이디 
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")  # AWS API 접근용 비밀번호 
+CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN", "").strip()       # CloudFront CDN 도메인 
 
 # ───────────────── 앱 등록 ─────────────────
 # Django에 “이 프로젝트에서 사용할 앱 목록”을 등록
@@ -177,6 +184,7 @@ LANGUAGE_CODE = "ko-kr"   # Django가 기본으로 사용할 언어 코드
 TIME_ZONE = "Asia/Seoul"  # Django의 기본 시간대(Time Zone) 설정
 USE_I18N = True           # Internationalization(국제화) 기능 활성화 여부 -> 여러 언어로 번역된 문자열을 지원할 수 있게 함
 USE_TZ = True             # Django가 시간을 내부적으로 UTC로 저장할지 여부 -> 내부 시계(USE_TZ)는 세계 표준시(UTC)로 맞추고, 보여줄 때(TIME_ZONE)만 현지 시계로 바꾸자
+TIME_ZONE = "Asia/Seoul"
 
 # ───────────────── 정적 파일 ─────────────────
 STATIC_URL = "static/"   # 브라우저가 정적 파일에 접근할 때 사용할 URL 경로 (예: logo 사진에 접근할 때 브라우저에서 /static/logo.png 로 접근)
@@ -242,8 +250,9 @@ REST_FRAMEWORK = {
 # 여기서 "ACCESS_TOKEN_LIFETIME", "REFRESH_TOKEN_LIFETIME", 'USER_ID_FIELD', 'USER_ID_CLAIM' 등은 SimpleJWT 라이브러리 내부에서 미리 정해져 있는 고정된 이름이다.
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-
+    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=120),
+    
+    # Django가 클라이언트로부터 JWT 토큰을 받을 때 "Bearer"라는 단어가 먼저 와야만 인식
     "AUTH_HEADER_TYPES": ("Bearer",),
     
     # 이 두개의 키의 값은 반드시 'user_seq'로 동일해야 한다.
