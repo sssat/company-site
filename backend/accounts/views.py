@@ -41,13 +41,16 @@
 # 즉, views.py 전체 파일을 통째로 뷰라고 부르는 것이 아니라, 각 엔드포인트를 처리하는 개별 클래스나 함수를 뷰라고 부른다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-import secrets
-import string
 from typing import Any, Dict, List
 from django.core import signing
-from .models import User, UserLevel
-from django.contrib.auth.hashers import make_password
+from .models import User, UserLevel, LoginLog
 import math
+import secrets
+import string
+from django.contrib.auth.hashers import make_password
+import hashlib
+import logging
+logger: logging.Logger = logging.getLogger(__name__)
 
 # Django 프로젝트의 설정값을 코드에서 사용하기 위해 가져옴
 from django.conf import settings
@@ -149,6 +152,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # 등록되어 있다면 -> 403 Forbidden 응답
 # 하지만 블랙리스트 기능을 도입하면 JWT의 가장 큰 장점인 "완전한 무상태(Stateless)"구조가 일부 희생되는 단점이 있다.
 
+# ─────────────────────────────────────────────────────────
+# (옵션) 블랙리스트 사용 여부 탐지 (현재 프로젝트에선 미사용)
+
 # 이 프로젝트에선 블랙리스트 안씀
 # BlacklistedToken 모델을 가져오는 시도를 한다.
 # 성공적으로 import 되면 -> 프로젝트가 블랙리스트 기능을 지원하고 있다는 뜻(설치/설정된 경우) -> SIMPLEJWT_BLACKLIST = True
@@ -160,18 +166,19 @@ try:
 # 이 경우 SIMPLEJWT_BLACKLIST = False로 설정 -> 블랙리스트 기능을 사용하지 않음
 except Exception:  
     SIMPLEJWT_BLACKLIST = False
+# ─────────────────────────────────────────────────────────
 
 # serializers.py 파일에서 여러 개의 시리얼라이저 클래스를 가져옴
 from .serializers import (
     IdPrecheckRequestSerializer, IdPrecheckResponseSerializer,
     EmailPrecheckRequestSerializer, EmailPrecheckResponseSerializer,
     RegisterRequestSerializer, RegisterResponseSerializer,
-    LoginRequestSerializer, LoginResponseSerializer,
+    LoginRequestSerializer, 
     TokenRefreshResponseSerializer,
     LogoutResponseSerializer,
     FindIdRequestSerializer, FindIdResponseSerializer,
     FindPasswordRequestSerializer, FindPasswordResponseSerializer,
-    ChangePasswordRequestSerializer, ChangePasswordResponseSerializer,
+    ChangePasswordRequestSerializer, 
     AdminPromoteRequestSerializer, AdminPromoteResponseSerializer,
     AdminDemoteRequestSerializer, AdminDemoteResponseSerializer,
     UserListResponseSerializer
@@ -404,7 +411,7 @@ class RegisterView(APIView):
 
 
 # ─────────────────────────────────────────────────────────
-# 4. 로그인 - 클래스형 뷰
+# 4. 로그인 (+ 로그인 시도 기록) - 클래스형 뷰
 #  POST /api/auth/login/
 # ─────────────────────────────────────────────────────────
 
@@ -421,19 +428,68 @@ class LoginView(APIView):
         if code == 1:
             return "ADMIN"
         return "USER"
+    
+        # IP / UA 추출
+    def _client_ip(self, request) -> str:
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        if xff:
+            return xff.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "") or ""
+
+    def _user_agent(self, request) -> str:
+        return (request.META.get("HTTP_USER_AGENT") or "")[:500]
+
+    # 비밀번호 입력값 해시(평문 저장 금지)
+    def _hash_for_log(self, raw: str | None) -> str:
+        if not raw:
+            return ""
+        s = (settings.SECRET_KEY + raw).encode("utf-8")
+        return "sha256:" + hashlib.sha256(s).hexdigest()
+    
+    # 로그인 시도 기록
+    def _write_login_log(self, *, request, input_id: str, is_success: bool,
+                         user: User | None, raw_password: str | None) -> None:
+        try:
+            # user FK가 null 불가라면, user가 없을 때는 기록 생략 (무결성 에러 방지)
+            user_fk_nullable = LoginLog._meta.get_field("user").null
+            if not user_fk_nullable and user is None:
+                return
+
+            LoginLog.objects.create(
+                user=user if user is not None else None,
+                input_id=input_id or "",
+                attempted_at=timezone.now(),  # models에서 auto_now_add면 DB가 찍음. 여기선 안전하게 넣어도 무방.
+                is_success=is_success,
+                ip_address=self._client_ip(request),
+                user_agent=self._user_agent(request),
+                input_password_hash=self._hash_for_log(raw_password),
+            )
+        except Exception:
+            logger.exception("Failed to write LoginLog")
 
     def post(self, request, *args, **kwargs):
-        # 1) 클라이언트가 보낸 request body(JSON)를 request.data로 파싱 -> 에러 발생 시 400
+        # 1) 파싱
         try:
             data = request.data
         except (ParseError, UnsupportedMediaType):
             return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 2) LoginRequestSerializer에 data를 전달해 역직렬화 + 유효성 검사 수행 -> 에러 발생 시 401, 400
+        # 2) 검증
         serializer = LoginRequestSerializer(data=data)
         try:
             serializer.is_valid(raise_exception=True)
         except ValidationError as exc:
+            # 실패 시도 기록 (가능하면 user resolve)
+            input_uid = str(data.get("user_id", "")) if isinstance(data, dict) else ""
+            user_obj = User.objects.filter(user_id=input_uid).only("pk").first()
+            self._write_login_log(
+                request=request,
+                input_id=input_uid,
+                is_success=False,
+                user=user_obj,  # user FK null 불가면, 미존재 아이디는 기록 생략됨
+                raw_password=str(data.get("password", "")) if isinstance(data, dict) else "",
+            )
+
             detail = exc.detail
             if isinstance(detail, dict) and "message" in detail:
                 return Response({"message": detail["message"]}, status=status.HTTP_401_UNAUTHORIZED)
@@ -441,6 +497,11 @@ class LoginView(APIView):
 
         # 3) JWT 토큰 발급
         user = serializer.validated_data["user"]  # 여기서 user key의 value는 DB의 한 행인 user 객체
+
+        # 최근 로그인 시각 갱신 (KST 반영은 settings.TIME_ZONE과 Admin이 처리)
+        now = timezone.now()
+        User.objects.filter(pk=user.pk).update(last_login_at=now)
+        user.last_login_at = now  # 메모리 객체도 최신화 (선택)
 
         # 리프레시 토큰 빈 객체 생성
         # RefreshToken()를 그냥 호출하면, SimpleJWT가 token_type="refresh", jti, exp, iat 등을 자동으로 채운 새 리프레시 토큰을 만든다.
@@ -487,14 +548,25 @@ class LoginView(APIView):
         # 5) Refresh 토큰을 HttpOnly 쿠키로 설정(선택)
         resp = Response(body, status=status.HTTP_200_OK)
 
-        # set_cookie 메서드를 사용해 HTTP 응답에 쿠키를 포함시킴
+        # 성공 시도 로그 기록 (반드시 return 전에)
+        self._write_login_log(
+            request=request,
+            input_id=body["user_id"],
+            is_success=True,
+            user=user,
+            raw_password=str(data.get("password", "")) if isinstance(data, dict) else "",
+        )
+
+        secure = not settings.DEBUG         # 개발(HTTP)에서는 False
+        samesite = "Lax" if settings.DEBUG else "Strict"
+
         resp.set_cookie(
             key="refresh",                            # 쿠키 이름
             value=str(refresh),                       # 쿠키 값 (리프레시 토큰 문자열)
             max_age=int(refresh.lifetime.total_seconds()),  # 쿠키 만료 시간
             httponly=True,                            # 자바스크립트에서 접근 불가 -> XSS 방지
-            secure=True,                              # HTTPS에서만 전송 (배포환경에서 필수)
-            samesite="Strict",                        # CSRF 방지 옵션 (Strict 모드)
+            secure=secure,
+            samesite=samesite,
             path="/api/auth/",                        # 특정 경로에서만 쿠키 전송
         )
         return resp
