@@ -6,7 +6,7 @@ from django.db import models         # 장고에서 DB와 관련된 모든 기�
 from django.utils import timezone    # 장고가 제공하는 시간/날짜 유틸리티 모듈
 
 # ─────────────────────────────────────────────────────────────
-# 회원 등급 (T_USER_LEVEL)
+# 1. 회원 등급 (T_USER_LEVEL)
 # 현재로썬 등급이 "[등급 0] 일반", "[등급 1] 관리자", "[등급 2] 슈퍼관리자"의 3개 등급만 있으므로 회원 등급 테이블에는 3개의 데이터만 존재할 예정이다.
 # 그리고 이 테이블은 python manage.py migrate 하기 전에 미리 3건(0/1/2) 시드 데이터를 python manage.py makemigrations 해놔야한다.
 # ─────────────────────────────────────────────────────────────
@@ -25,12 +25,13 @@ class UserLevel(models.Model):
     class Meta:
         db_table = "T_USER_LEVEL"  # 이 모델이 실제 DB에 만들어질 때의 테이블 이름을 T_USER_LEVEL로 설정
 
+    # 이곳에서의 출력 값이 장고 어드민 페이지에 출력된다.
     def __str__(self): 
         return f"[등급 {self.grade_code}] {self.grade_name}"   # 예: "[등급 0] 일반", "[등급 1] 관리자", "[등급 2] 슈퍼관리자"
 
 
 # ─────────────────────────────────────────────────────────────
-# 회원 (T_USER)
+# 2. 회원 (T_USER)
 # ─────────────────────────────────────────────────────────────
 class User(models.Model):
     # 회원일련번호 (PK)
@@ -67,10 +68,10 @@ class User(models.Model):
     # 비밀번호 해시
     password_hash = models.CharField(max_length=255, db_column="PASSWORD_HASH")
 
-    # 새 필드 추가
-    password_changed_at = models.DateTimeField(null=True, blank=True, default=None)
+    # 비밀번호 변경 일시
+    password_changed_at = models.DateTimeField(null=True, blank=True, default=None, db_column="PASSWORD_CHANGED_AT")
 
-    # 성별: M/F (기본값 강제하지 않음 → 반드시 선택/입력하도록)
+    # 성별: M/F (기본값 강제하지 않음 -> 반드시 선택/입력하도록)
     gender = models.CharField(
         max_length=1, 
         choices=(
@@ -88,20 +89,36 @@ class User(models.Model):
     # 최종 접속 시간
     last_login_at = models.DateTimeField(null=True, blank=True, db_column="LAST_LOGIN_AT")
 
-    # 관리자 등급 부여 일시
-    granted_at = models.DateTimeField(null=True, blank=True, db_column="GRANTED_AT")   # DB에 비워 넣으려면 → null=True. 폼/API에서 빈값 허용하려면 → blank=True
+    # 관리자(admin) 등급 부여 일시
+    # 관리자에서 일반 유저로 강등되면 null 값으로 대체됨
+    granted_at = models.DateTimeField(null=True, blank=True, db_column="GRANTED_AT")   # DB에 비워 넣으려면 -> null=True. 폼/API에서 빈값 허용하려면 -> blank=True
 
     # 계정 생성 일시
     created_at = models.DateTimeField(db_column="CREATED_AT", default=timezone.now)
 
-    # 회원 정보 수정 일시
-    updated_at = models.DateTimeField(null=True, blank=True, db_column="UPDATED_AT")
 
-    # DRF/Django 권한체크가 기대하는 최소한의 인터페이스
+    # <함수 vs 프로퍼티>
+    # 함수: obj.func() 처럼 괄호로 호출해야 함
+    # 프로퍼티: obj.prop 처럼 괄호 없이 접근 가능
+
+    # <아래 프로퍼티 직접 구현한 이유>
+    # 원래 이처럼 AbstractBaseUser 클래스 안에 정의되어 있는데 User 모델이 AbstractBaseUser를 상속받지 않고 models.Model만 단독으로 상속받고 있기때문
+    # class AbstractBaseUser:
+    #     @property
+    #     def is_authenticated(self):
+    #         return True  
+    # 
+    #     @property
+    #     def is_anonymous(self):
+    #         return False
+    # 로그인 성공 시: request.user = User -> is_authenticated=True, is_anonymous=False
+
+    # 이 객체(User)가 로그인된 사용자다 라는 표시 -> 항상 True를 반환하므로, 이 모델 객체는 "인증된 사용자"로 간주됨
     @property
     def is_authenticated(self) -> bool:
         return True
-
+    
+    # 이 객체가 익명 사용자(로그인 안 된 상태) 인지 확인 -> 항상 False를 반환하므로, 이 모델 객체는 "익명 사용자가 아니다"로 간주됨 
     @property
     def is_anonymous(self) -> bool:
         return False
@@ -110,22 +127,25 @@ class User(models.Model):
         db_table = "T_USER"
 
     def __str__(self):
-        return f"{self.user_id} ({self.user_name})"  # 예: asdf123 (홍길동)
+        return f"[{self.user_seq}] {self.user_id} ({self.user_name})"  # 예: asdf123 (홍길동)
 
 
 # ─────────────────────────────────────────────────────────────
-# 로그인 시도기록 (T_LOGIN_LOG)
+# 3. 로그인 시도기록 (T_LOGIN_LOG)
 # ─────────────────────────────────────────────────────────────
 class LoginLog(models.Model):
     # 시도 일련번호: PK
     login_log_seq = models.AutoField(primary_key=True, db_column="LOGIN_LOG_SEQ")
 
     # 회원 일련번호: FK => 객체
+    # 실패 시도(미존재 아이디)도 남기려면 null/blank 허용
     user = models.ForeignKey(
         "accounts.User",
-        on_delete=models.PROTECT,    # PROTECT: User 삭제 시 참조 중인 LoginLog가 있으면 삭제가 안됨 -> 따라서 User를 지우려면 LoginLog 먼저 삭제해야됨  
+        on_delete=models.PROTECT,   # PROTECT: User 삭제 시 참조 중인 LoginLog가 있으면 삭제가 안됨 -> 따라서 User를 지우려면 LoginLog 먼저 삭제해야됨  
         db_column="USER_SEQ",
         related_name="login_logs",
+        null=True,
+        blank=True,
     )
 
     # 사용자가 입력한 아이디(성공/실패 공통)
@@ -150,6 +170,12 @@ class LoginLog(models.Model):
         db_table = "T_LOGIN_LOG"
 
     def __str__(self):
-        return f"{self.input_id} @ {self.attempted_at} ({'SUCCESS' if self.is_success else 'FAIL'})"  # 예: asdf123 @ 2025-09-03 14:05:12+09:00 (SUCCESS)
+        # DB(UTC) -> 현재 타임존(Asia/Seoul)으로 변환
+        dt = timezone.localtime(self.attempted_at)
+
+        # 보기 좋은 포맷(초까지, +09:00 포함)
+        when = dt.isoformat(sep=" ", timespec="seconds")  # 예: 2025-09-28 15:38:37+09:00
+
+        return f"[{self.login_log_seq}] {self.input_id} @ {when} ({'SUCCESS' if self.is_success else 'FAIL'})"  # 예: asdf123 @ 2025-09-03 14:05:12+09:00 (SUCCESS)
 
 
