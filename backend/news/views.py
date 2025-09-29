@@ -150,9 +150,9 @@ class AdminNewsCreateView(APIView):
 
 # ─────────────────────────────────────────────────────────────
 # [PUT/PATCH/DELETE] /api/admins/news/{news_seq}/  뉴스 수정/삭제(관리자)
-#   - 프런트에서 단건을 선택해 들어와 기존 내용을 수정하는 흐름에 맞춰
-#     PUT/PATCH는 partial=True로 처리
+#   - 프런트의 단건 수정 플로우에 맞춰 PUT/PATCH 모두 partial=True로 처리
 #   - DELETE도 같은 경로에서 처리 (405 방지)
+#   - 삭제 시 히스토리에 FK와 스냅샷(news_seq_snapshot) 기록
 # ─────────────────────────────────────────────────────────────
 class AdminNewsDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminOrSuperAdmin]
@@ -165,17 +165,23 @@ class AdminNewsDetailView(APIView):
         return self._update(request, news_seq, partial=True)
 
     def _update(self, request, news_seq: int, partial: bool):
+        # 대상 조회
         try:
             obj = NewsPost.objects.get(news_seq=news_seq)
         except NewsPost.DoesNotExist:
             return Response({"message": "존재하지 않는 뉴스입니다."}, status=status.HTTP_404_NOT_FOUND)
 
+        # 프런트 편의 처리: 빈 문자열/문자열 "null" 로 들어온 키는 제거
         payload = request.data.copy()
         if payload.get("image_key") in (None, "", "null"):
             payload.pop("image_key", None)
 
+        # 검증 및 저장
         ser = NewsUpdateRequestSerializer(
-            instance=obj, data=payload, partial=partial, context={"request": request}
+            instance=obj,
+            data=payload,
+            partial=partial,
+            context={"request": request},
         )
         try:
             ser.is_valid(raise_exception=True)
@@ -186,7 +192,7 @@ class AdminNewsDetailView(APIView):
                 resp["received"] = payload
             return Response(resp, status=status.HTTP_400_BAD_REQUEST)
 
-        obj = ser.save()  # updated_by/updated_at 설정 포함
+        obj = ser.save()  # (시리얼라이저 내부에서 updated_by/updated_at 세팅)
         resp = NewsUpdateResponseSerializer(
             {
                 "news_seq": obj.news_seq,
@@ -201,24 +207,27 @@ class AdminNewsDetailView(APIView):
         _ = NewsDeleteRequestSerializer(data={})
         _.is_valid(raise_exception=False)
 
+        # 대상 조회
         try:
             obj = NewsPost.objects.get(news_seq=news_seq)
         except NewsPost.DoesNotExist:
             return Response({"message": "존재하지 않는 뉴스입니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        # (선택) 삭제 이력 기록: 사유 없이 삭제자/시각만 저장
+        # 삭제 이력 기록(FK + 스냅샷). 이력 실패는 본 삭제에 영향 주지 않음.
         try:
             NewsPostHistory.objects.create(
-                news=obj,
-                deleted_by=request.user,   # PROTECT이면 실제 사용자여야 함
+                news=obj,                           # FK (삭제 후엔 NULL로 변할 수 있음)
+                news_seq_snapshot=obj.news_seq,     # 스냅샷: 삭제 후에도 번호 확인 가능
+                title_snapshot=obj.title,           # 제목 스냅샷
+                deleted_by=request.user,            # PROTECT 관계 → 실제 사용자 필요
                 deleted_at=timezone.now(),
-                deleted_reason=None,
             )
         except Exception:
-            # 이력 기록 실패는 본 삭제에 영향 주지 않음
             pass
 
+        # 실제 삭제
         obj.delete()
+
         resp = NewsDeleteResponseSerializer({"message": "뉴스가 삭제되었습니다."}).data
         return Response(resp, status=status.HTTP_200_OK)
 
