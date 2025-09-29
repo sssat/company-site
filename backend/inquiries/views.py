@@ -3,7 +3,7 @@
 
 from django.db.models import Q
 from django.utils import timezone
-
+from django.db import transaction
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +15,6 @@ from .serializers import (
     InquiryCreateRequestSerializer,
     InquiryCreateResponseSerializer,
     InquiryListRequestSerializer,
-    InquiryListItemSerializer,
     InquiryListResponseSerializer,
     InquiryDetailResponseSerializer,
     InquiryProcessRequestSerializer,
@@ -42,7 +41,7 @@ class IsAdminOrSuperAdmin(permissions.BasePermission):
 
 # ─────────────────────────────────────────────────────────────
 # 1) POST /api/inquiries/   (문의 등록 - 공개)
-#    GET  /api/inquiries/   (문의 목록 - 관리자)
+#    GET  /api/inquiries/   (문의 목록 - 관리자)    
 #    ※ 같은 경로에서 HTTP 메서드별 권한/동작 분리
 # ─────────────────────────────────────────────────────────────
 class InquiryListCreateView(APIView):
@@ -78,10 +77,8 @@ class InquiryListCreateView(APIView):
         status_filter = params.validated_data.get("status", "all")
         order = params.validated_data.get("order", "recent")
 
-        # 2) 기본 쿼리셋: 소프트 삭제 제외 (+N+1 방지)
-        qs = Inquiry.objects.filter(deleted_at__isnull=True).select_related(
-            "processed_by", "deleted_by"
-        )
+        # 2) 기본 쿼리셋 (소프트 삭제 컬럼 제거됨)
+        qs = Inquiry.objects.all().select_related("processed_by")
 
         # 3) 검색(이름/이메일/제목/내용)
         if q:
@@ -99,16 +96,13 @@ class InquiryListCreateView(APIView):
             qs = qs.filter(is_processed=True)
 
         # 5) 정렬: recent(내림차순) / oldest(오름차순)
-        if order == "oldest":
-            qs = qs.order_by("submitted_at")
-        else:
-            qs = qs.order_by("-submitted_at")
+        qs = qs.order_by("submitted_at" if order == "oldest" else "-submitted_at")
 
         # 6) 페이지네이션
         total = qs.count()
         start = (page - 1) * size
         end = start + size
-        items = list(qs[start:end])  # 직렬화는 ResponseSerializer에게 맡김
+        items = list(qs[start:end])
 
         resp = InquiryListResponseSerializer(
             {
@@ -130,13 +124,12 @@ class InquiryListCreateView(APIView):
 class InquiryDetailDeleteView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
 
-    # 단건 조회 (삭제되지 않은 항목만)
+    # 단건 조회 (소프트 삭제 컬럼 제거됨 → 일반 조회)
     def get(self, request: Request, inquiry_seq: int, *args, **kwargs):
         try:
             inquiry = (
                 Inquiry.objects
-                .filter(deleted_at__isnull=True)
-                .select_related("processed_by", "deleted_by")
+                .select_related("processed_by")  # deleted_by 제거
                 .get(inquiry_seq=inquiry_seq)
             )
         except Inquiry.DoesNotExist:
@@ -147,12 +140,10 @@ class InquiryDetailDeleteView(APIView):
 
     # 삭제 (항상 하드 삭제)
     def delete(self, request: Request, inquiry_seq: int, *args, **kwargs):
-        try:
-            inquiry = Inquiry.objects.get(inquiry_seq=inquiry_seq)  # 소프트 삭제 과거 데이터도 포함하여 조회
-        except Inquiry.DoesNotExist:
+        # 존재하면 삭제, 없으면 404
+        deleted, _ = Inquiry.objects.filter(inquiry_seq=inquiry_seq).delete()
+        if deleted == 0:
             return Response({"message": "대상을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
-        inquiry.delete()  # 물리 삭제
 
         return Response(
             InquiryDeleteResponseSerializer(
@@ -165,31 +156,44 @@ class InquiryDetailDeleteView(APIView):
 # ─────────────────────────────────────────────────────────────
 # 4) PUT /api/inquiries/{inquiry_seq}/process/   (처리 상태 변경 전용)
 #    - 요구사항: 한 번 처리완료(True)로 바꾸면 되돌릴 수 없음
+#    - 소프트 삭제 컬럼(deleted_at) 제거에 맞게 쿼리 수정
+#    - 멱등/경쟁 상태 대비를 위해 select_for_update 사용(선택)
 # ─────────────────────────────────────────────────────────────
 class InquiryProcessPutView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
 
+    @transaction.atomic
     def put(self, request: Request, inquiry_seq: int, *args, **kwargs):
+        # deleted_at 컬럼 제거에 따라 일반 조회로 변경
         try:
-            inquiry = Inquiry.objects.get(inquiry_seq=inquiry_seq, deleted_at__isnull=True)
+            inquiry = (
+                Inquiry.objects
+                .select_for_update()
+                .select_related("processed_by")
+                .get(inquiry_seq=inquiry_seq)
+            )
         except Inquiry.DoesNotExist:
             return Response({"message": "대상을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        # { "is_processed": bool } 받지만, 완료→미완료 되돌리기는 금지
+        # { "is_processed": bool } 검증
         req_srz = InquiryProcessRequestSerializer(data=request.data)
         req_srz.is_valid(raise_exception=True)
         flag = req_srz.validated_data["is_processed"]
 
+        # False로 요청: 완료 → 미완료 되돌리기 금지
         if flag is False:
             if inquiry.is_processed:
                 return Response(
                     {"message": "이미 처리완료된 문의는 되돌릴 수 없습니다."},
                     status=status.HTTP_409_CONFLICT,
                 )
-            # 원래도 False였다면 no-op (멱등)
+            # 이미 미완료라면 no-op (멱등)
             return Response(InquiryProcessResponseSerializer(inquiry).data, status=status.HTTP_200_OK)
 
-        # True로 설정 (처리완료로 전환)
+        # True로 요청: 처리완료로 전환 (이미 완료였다면 멱등 응답)
+        if inquiry.is_processed:
+            return Response(InquiryProcessResponseSerializer(inquiry).data, status=status.HTTP_200_OK)
+
         inquiry.is_processed = True
         inquiry.processed_at = timezone.now()
         inquiry.processed_by = request.user
