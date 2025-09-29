@@ -1,12 +1,8 @@
-# models.py => 데이터베이스 구조(스키마)를 정의하는 파일 (ERD 설계도를 토대로 작성). 그리고 이게 Entity(DB 테이블 구조)이다.
-# models.py 안에 클래스를 정의하면 장고가 알아서 DB 테이블로 바꿔준다.
-# 만약 models.py를 바꾸면 새로운 마이그레이션을 만들고 다시 migrate 해야한다.
-
-from django.db import models         # 장고에서 DB와 관련된 모든 기능(ORM 필드, 모델 클래스 등)이 들어있는 모듈
-from django.utils import timezone    # 장고가 제공하는 시간/날짜 유틸리티 모듈
+from django.db import models         
+from django.utils import timezone    
 
 # ─────────────────────────────────────────────────────────────
-# 문의하기 (T_INQUIRY)
+# 1. 문의하기 (T_INQUIRY)
 # ─────────────────────────────────────────────────────────────
 class Inquiry(models.Model):
     # 문의글 일련번호
@@ -24,16 +20,6 @@ class Inquiry(models.Model):
         on_delete=models.PROTECT,
         db_column="PROCESSED_SEQ",
         related_name="processed_inquiries",
-    )
-
-    # 삭제자 일련번호: FK => 객체
-    deleted_by = models.ForeignKey(
-        "accounts.User",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        db_column="DELETED_SEQ",
-        related_name="deleted_inquiries",
     )
 
     # 문의자 이름
@@ -56,9 +42,6 @@ class Inquiry(models.Model):
 
     # 처리상태
     is_processed = models.BooleanField(default=False, db_column="IS_PROCESSED")
-
-    # 문의글 삭제일시
-    deleted_at = models.DateTimeField(null=True, blank=True, db_column="DELETED_AT")
 
     class Meta:
         db_table = "T_INQUIRY"
