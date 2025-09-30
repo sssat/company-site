@@ -11,11 +11,10 @@
 # => 비동기(Asynchronous) + 동기 둘 다 지원, 실시간 서비스(WebSocket), 채팅, 스트리밍, 동시성 처리에 강점
 # 둘 다 배포할 때 쓰는 파일이고 서비스 성격에 따라 보통은 둘 중 하나만 쓴다. 그래서 회사소개 홈페이지 처럼 단순 HTTP 서비스라면 배포 시 wsgi.py만 사용한다.
 
-from pathlib import Path        
+from pathlib import Path        # 경로를 문자열이 아닌 객체로 다룰 수 있음
 from datetime import timedelta  # JWT 수명 설정에 사용
 import environ                  # .env 파일을 읽어 환경 변수로 파싱하는 라이브러리
 import os
-
 
 # ───────────────── 기본 경로 ─────────────────
 # backend/ 폴더를 프로젝트의 기준 경로로 설정함
@@ -33,19 +32,27 @@ SECRET_KEY = env("SECRET_KEY")  # 장고의 암호화/서명에 쓰이는 프로
 # True -> 개발 모드
 # False -> 운영 모드
 # True일 때는 오류 페이지가 상세하게 표시되지만 보안상 위험. 운영 서버에서는 반드시 DEBUG=False로 변경 해야한다.
-DEBUG=True
+DEBUG = env.bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # 장고가 요청 Host 헤더를 검증할 때 허용할 도메인/IP 목록
+# Django가 접속을 허용할 호스트/도메인 목록
+# 호스트(Host): IP 또는 도메인(예: 127.0.0.1, example.com)
+# 도메인(Domain): 사람이 읽기 쉬운 이름으로 DNS가 실제 IP로 변환 ( 1)최상위 도메인: .com, .org, .net, .kr, .jp, ... 2) 2차 도메인: example.com, google.com, kakao.co.kr, ... 3) 서브 도메인: www.example.com, m.naver.com, ...)
+# 흐름:
+# 1) 사용자가 https://example.com 입력
+# 2) DNS가 example.com -> 3.25.100.200(IP)로 해석
+# 3) 브라우저는 Host: example.com 헤더로 요청을 보냄
+# 4) Django가 Host 헤더를 ALLOWED_HOSTS와 대조하여 없으면 400 Bad Request
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "[::1]"]) 
 
 # ───────── Email (Naver SMTP) ─────────
 # <SMTP란?>
 # 이메일을 보내기 위한 표준 프로토콜
 # 이메일 발송만 담당 (수신은 IMAP/POP3가 담당)
 # 포트는 465(SSL 기반 SMTP, 네이버 기본값), 587(TLS 기반 SMTP, Gmail 주로 사용)를 주로 사용
-# 유저(클라이언트) -> 백엔드(내 Django 서버) -> SMTP 서버(smtp.naver.com(네이버) / smtp.googel.com(구글)) -> 수신자 메일 서버(gmail.com / naver.com)
+# 유저(클라이언트) -> 백엔드(내 Django 서버) -> 발송용 SMTP 서버(smtp.naver.com(네이버) / smtp.gmail.com(구글)) -> 유저 메일 서버 (예: gmail.com, naver.com 의 MX 서버) -> 유저가 IMAP/POP3등 으로 메일 확인
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"   # Django가 어떤 방식으로 이메일을 보낼지 결정하는 설정 -> SMTP 프로토콜을 사용하겠다는 의미
- 
+
 EMAIL_HOST = "smtp.naver.com"    # 사용할 SMTP 서버의 주소 -> 네이버 SMTP 서버 주소
 EMAIL_PORT = 465                 # SMTP 서버와 통신할 때 사용할 포트 번호
 EMAIL_USE_SSL = True             # 네이버는 SSL을 사용하므로 True로 설정
@@ -53,18 +60,18 @@ EMAIL_USE_TLS = False            # TLS 사용 안 함 (SSL과 TLS는 동시에 �
 
 EMAIL_HOST_USER = env("NAVER_USER")          # Django가 네이버 SMTP 서버에 로그인할 때 사용하는 계정
 EMAIL_HOST_PASSWORD = env("NAVER_APP_PASS")  # 네이버 앱 비밀번호 (2단계 인증 시 필요)
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER         # Django가 메일 보낼 때 사용자에게 보이는 발신자 메일 주소 
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER         # Django가 메일 보낼 때 유저에게 보이는 발신자 메일 주소 
 EMAIL_TIMEOUT = 15                           # SMTP 서버와 연결할 때 응답 대기 시간(초 단위) -> 15초 안에 응답이 없으면 TimeoutError 발생 -> 서버가 멈추지 않도록 안전장치 역할
 
 # ───────── 프론트 URL(메일 링크용) ─────────
 # 사용자가 메일로 온 비밀번호 재설정 링크를 클릭하면 열리게 될 웹사이트(프론트) 주소를 설정
 # .env 파일에 값이 있으면 그걸 사용하고, 없으면 http://127.0.0.1:5173을 기본값으로 사용
-FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://127.0.0.1:5173") 
+FRONTEND_BASE_URL = env("FRONTEND_BASE_URL")
 
 # 비밀번호 재설정 페이지의 경로
 # .env에 값이 없으면 "/reset-password"를 기본값으로 사용
 # PASSWORD_RESET_PATH 링크는 FRONTEND_BASE_URL 뒤에 붙여져서 최종 완성된다.
-PASSWORD_RESET_PATH = env("PASSWORD_RESET_PATH", default="/reset-password")
+PASSWORD_RESET_PATH = env("PASSWORD_RESET_PATH", default="/change-password")
 
 # ───────────────── AWS ─────────────────
 # S3: 저장소(Storage) 역할 -> 이미지 데이터가 여기 저장됨
@@ -115,8 +122,8 @@ INSTALLED_APPS = [
 # 배열 순서 중요
 # 브라우저 요청(request)이 들어오면 위에서 아래로 미들웨어를 통과해 뷰까지 가고, 뷰가 만든 응답(response)은 아래에서 위로 다시 같은 미들웨어를 거쳐 나간다.
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",                    # CORS 헤더 추가/관리, 반드시 CommonMiddleware보다 위여야 한다.
     "django.middleware.security.SecurityMiddleware",            # 보안 관련 헤더(HSTS, SSL redirect 등) 지원. -> HSTS(브라우저에게 “이 도메인은 반드시 HTTPS로만 접속해라”라고 강제하는 보안 규칙. 사용자가 http:// 로 접속해도 브라우저가 자동으로 https:// 로 바꿔줌), SSL redirect(서버 차원에서 http:// 요청이 오면 https:// 로 강제 리다이렉트 시킴)
+    "corsheaders.middleware.CorsMiddleware",                    # CORS 헤더 추가/관리, 반드시 CommonMiddleware보다 위여야 한다.
     "django.contrib.sessions.middleware.SessionMiddleware",     # 사용자별 데이터를 서버 메모리에 저장해두고, 쿠키(브라우저(클라이언트)에 저장되는 작은 텍스트 데이터)로 연결해주는 기능
     "django.middleware.common.CommonMiddleware",                # 주소 오타 자동 보정 + 응답 캐싱(응답 내용을 브라우저/프록시에 저장해두고, 안 바뀌면 다시 안 보내주는 효율화) 지원
     "django.middleware.csrf.CsrfViewMiddleware",                # CSRF 공격 방지. 폼 POST나 세션 기반 인증에 중요 -> 폼 요청이 진짜 내 사이트에서 발생한 건지 확인하는 안전장치
@@ -184,7 +191,6 @@ LANGUAGE_CODE = "ko-kr"   # Django가 기본으로 사용할 언어 코드
 TIME_ZONE = "Asia/Seoul"  # Django의 기본 시간대(Time Zone) 설정
 USE_I18N = True           # Internationalization(국제화) 기능 활성화 여부 -> 여러 언어로 번역된 문자열을 지원할 수 있게 함
 USE_TZ = True             # Django가 시간을 내부적으로 UTC로 저장할지 여부 -> 내부 시계(USE_TZ)는 세계 표준시(UTC)로 맞추고, 보여줄 때(TIME_ZONE)만 현지 시계로 바꾸자
-TIME_ZONE = "Asia/Seoul"
 
 # ───────────────── 정적 파일 ─────────────────
 STATIC_URL = "static/"   # 브라우저가 정적 파일에 접근할 때 사용할 URL 경로 (예: logo 사진에 접근할 때 브라우저에서 /static/logo.png 로 접근)
@@ -249,8 +255,8 @@ REST_FRAMEWORK = {
 # 그리고 USER_ID_FIELD를 user_seq로 지정했으므로 USER_ID_CLAIM도 user_seq로 지정한다.
 # 여기서 "ACCESS_TOKEN_LIFETIME", "REFRESH_TOKEN_LIFETIME", 'USER_ID_FIELD', 'USER_ID_CLAIM' 등은 SimpleJWT 라이브러리 내부에서 미리 정해져 있는 고정된 이름이다.
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=120),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=60),
     
     # Django가 클라이언트로부터 JWT 토큰을 받을 때 "Bearer"라는 단어가 먼저 와야만 인식
     "AUTH_HEADER_TYPES": ("Bearer",),
