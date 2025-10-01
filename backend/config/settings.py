@@ -42,7 +42,10 @@ DEBUG = env.bool("DEBUG", default=False)
 # 2) DNS가 example.com -> 3.25.100.200(IP)로 해석
 # 3) 브라우저는 Host: example.com 헤더로 요청을 보냄
 # 4) Django가 Host 헤더를 ALLOWED_HOSTS와 대조하여 없으면 400 Bad Request
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "[::1]"]) 
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS",
+    default=["localhost", "127.0.0.1", "[::1]", ".trycloudflare.com"],
+)
 
 # ───────── Email (Naver SMTP) ─────────
 # <SMTP란?>
@@ -171,10 +174,16 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"  # WSGI 진입점(입구): config/wsgi.py 파일 안의 application 객체
 
 # ───────────────── 데이터베이스 ─────────────────
+raw = env("DB_NAME", default=str(BASE_DIR / "db.sqlite3"))
+raw = raw.split("#", 1)[0].strip()      # 실수로 들어온 주석/메모 제거
+db_path = Path(raw)
+if not db_path.is_absolute():
+    db_path = BASE_DIR / db_path        # 상대경로면 BASE_DIR 기준으로 보정
+
 DATABASES = {
     "default": {
         "ENGINE": env("DB_ENGINE", default="django.db.backends.sqlite3"),
-        "NAME": env("DB_NAME", default=BASE_DIR / "db.sqlite3"),
+        "NAME": str(db_path),           # 항상 절대경로 문자열
     }
 }
 
@@ -271,26 +280,19 @@ SIMPLE_JWT = {
 # 브라우저는 출처(origin) 가 다르면(예: localhost:8000 ↔ localhost:5173) 보안 때문에 요청을 막는다.
 # 따라서 프론트엔드(React)와 백엔드(Django)가 포트가 달라서 발생하는 문제(CORS/CSRF)를 해결하기 위해 사용
 
+# refresh 쿠키를 쓰므로 cred 허용
+CORS_ALLOW_CREDENTIALS = True
+
+# 개발 편의를 위해 로컬 + trycloudflare 전부 허용
 # CORS_ALLOWED_ORIGINS에 허용할 프론트 주소를 넣어주면, Django가 응답할 때 Access-Control-Allow-Origin 헤더를 붙여줌 -> 브라우저가 “아, 이 출처는 허용된 곳이네” 하고 요청을 허용
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
-# refresh 쿠키를 쓰므로 cred 허용
-CORS_ALLOW_CREDENTIALS = True
-
-# 프리플라이트에서 허용할 헤더(로그인/일반 JSON 요청에 필요)
-CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
+# 랜덤 터널 주소 자동 허용(https)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.trycloudflare\.com$",
 ]
 
 # 세션 기반 로그인(쿠키 사용)에서는, 악성 사이트가 사용자의 브라우저를 속여 Django에 요청을 보내는 공격이 가능 -> CSRF 공격
@@ -298,7 +300,14 @@ CORS_ALLOW_HEADERS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://*.trycloudflare.com",
 ]
+
+# 쿠키 기반 인증/리프레시에 필요(서브도메인 간)
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=True)
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", default="None")
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", default="None")
 
 # ───────────────── 기본 PK 타입 ─────────────────
 # Django에서 데이터베이스 모델의 기본 Primary Key(PK) 타입을 뭘로 쓸지 정하는 설정
