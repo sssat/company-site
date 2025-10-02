@@ -1,3 +1,4 @@
+/* src/components/Auth/SignUp/SignUpCard/SignUpCard.module.css  */
 :root {
   --input-h: 44px;
   --input-br: 10px;
@@ -10,16 +11,16 @@
   justify-content: center;
 }
 
+/* ─── 폭 제어: 모바일에서 넘치지 않게 ─── */
 .wrap {
-  /* 가로 길이 제어 */
+  /* 기존 변수는 유지하되 기본 min을 0으로 */
   --_w:     var(--card-width, 420px);
-  --_w-min: var(--card-min-width, 480px);
+  --_w-min: var(--card-min-width, 0px);     /* ← 480px → 0px */
   --_w-max: var(--card-max-width, 560px);
 
   width: min(100%, var(--_w));
   min-width: var(--_w-min);
-  max-width: var(--_w-max);
-  margin: 0 auto;
+  max-width: min(100%, var(--_w-max));      /* 100% 상한 추가 */
 }
 
 .card {
@@ -146,7 +147,8 @@
 .error { color: #ef4444; }
 .ok    { color: #16a34a; }
 
-/* 반응형: 좁은 화면에서는 버튼이 아래로 떨어지게 */
-@media (max-width: 560px) {
-  .inlineOut { grid-template-columns: 1fr; }
+/* 더 안전한 모바일 오버라이드 */
+@media (max-width: 480px) {
+  .wrap { width: 100%; min-width: 0; max-width: 100%; }
+  .card { padding: 20px; }                  /* 안쪽 패딩도 살짝 줄이기 */
 }
