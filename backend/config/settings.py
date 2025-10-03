@@ -94,6 +94,7 @@ CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN", "").strip()       # CloudFron
 # 앱은 보통 도메인 별로 나눈다. accounts(회원/권한), news(뉴스/콘텐츠), inquiries(문의), ...
 # INSTALLED_APPS에 새로운 앱을 추가하거나 models.py를 수정했을 시엔 다시 마이그레이션을 해야한다. -> 이땐 python manage.py migrate만 해주면된다.
 INSTALLED_APPS = [
+    "whitenoise.runserver_nostatic",
     "django.contrib.admin",           # 관리자 사이트(/admin) 기능. 관리자 화면 쓰려면 필수
     "django.contrib.auth",            # 사용자/권한/인증 시스템. 로그인/로그아웃 등
     "django.contrib.contenttypes",    # Generic relations 지원(다형성 관계의 기반). 내부적으로 많이 쓰여 사실상 필수
@@ -126,6 +127,7 @@ INSTALLED_APPS = [
 # 브라우저 요청(request)이 들어오면 위에서 아래로 미들웨어를 통과해 뷰까지 가고, 뷰가 만든 응답(response)은 아래에서 위로 다시 같은 미들웨어를 거쳐 나간다.
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",            # 보안 관련 헤더(HSTS, SSL redirect 등) 지원. -> HSTS(브라우저에게 “이 도메인은 반드시 HTTPS로만 접속해라”라고 강제하는 보안 규칙. 사용자가 http:// 로 접속해도 브라우저가 자동으로 https:// 로 바꿔줌), SSL redirect(서버 차원에서 http:// 요청이 오면 https:// 로 강제 리다이렉트 시킴)
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",                    # CORS 헤더 추가/관리, 반드시 CommonMiddleware보다 위여야 한다.
     "django.contrib.sessions.middleware.SessionMiddleware",     # 사용자별 데이터를 서버 메모리에 저장해두고, 쿠키(브라우저(클라이언트)에 저장되는 작은 텍스트 데이터)로 연결해주는 기능
     "django.middleware.common.CommonMiddleware",                # 주소 오타 자동 보정 + 응답 캐싱(응답 내용을 브라우저/프록시에 저장해두고, 안 바뀌면 다시 안 보내주는 효율화) 지원
@@ -215,7 +217,10 @@ STATIC_URL = "static/"   # 브라우저가 정적 파일에 접근할 때 사용
 
 # 배포용 폴더 경로 -> 따라서 배포 하지 않을거라면 이 코드는 필요없다.
 # python manage.py collectstatic 명령어를 실행하면, 각 앱(app_name/static/…)에 흩어져 있는 모든 정적 파일을 하나로 모아서(collect) -> BASE_DIR/staticfiles/ 안에 저장
-STATIC_ROOT = BASE_DIR / "staticfiles"      
+STATIC_ROOT = BASE_DIR / "staticfiles"  
+
+# WhiteNoise (운영)
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # ───────────────── DRF / JWT ─────────────────
 # REST_FRAMEWORK => Django REST Framework(DRF)의 전역 기본 설정을 정의
@@ -286,7 +291,7 @@ CORS_ALLOW_CREDENTIALS = True
 # 개발 편의를 위해 로컬 + trycloudflare 전부 허용
 # CORS_ALLOWED_ORIGINS에 허용할 프론트 주소를 넣어주면, Django가 응답할 때 Access-Control-Allow-Origin 헤더를 붙여줌 -> 브라우저가 “아, 이 출처는 허용된 곳이네” 하고 요청을 허용
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
+    "http://localhost:5173",    
     "http://127.0.0.1:5173",
 ]
 
@@ -314,3 +319,24 @@ CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", default="None")
 # BigAutoField => 64bit 정수 (최대 9경 이상)
 # 즉, 앞으로 새로 만드는 모든 모델의 PK(id)는 자동 증가하는 64bit 정수로 생성된다.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# --- 운영(Cloudflare Tunnel) 보안 설정 ---
+# Cloudflare가 HTTPS를 종료하고 로컬로 HTTP를 프록시하므로,
+# 장고가 X-Forwarded-Proto 를 보고 HTTPS로 간주하도록 설정
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
+# 모든 요청을 HTTPS로 리다이렉트 (터널 외부는 https)
+SECURE_SSL_REDIRECT = True
+
+# HSTS(브라우저에 이 도메인은 무조건 HTTPS로 접속하라고 고지)
+SECURE_HSTS_SECONDS = 31536000       # 1년
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# 쿠키/보안 헤더(운영 권장)
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False   # CSRF 토큰은 JS에서 읽어야 하므로 False 유지
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
