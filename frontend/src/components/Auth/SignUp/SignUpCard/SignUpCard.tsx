@@ -16,7 +16,7 @@ export type SignUpForm = {
   agree: boolean;
 };
 
-type Errors =
+type LocalErrors =
   Partial<
     Record<
       | "username"
@@ -26,37 +26,28 @@ type Errors =
       | "birth"
       | "gender"
       | "email"
-      | "agree",
+      | "agree"
+      | "general",
       string
     >
   >;
 
 type SignUpCardProps = {
-  /** 카드 폭을 숫자(px) 또는 CSS 크기 문자열로 지정 (기본: 360px) */
   cardWidth?: number | string;
-  /** 가입 제출 핸들러(연동 시 교체) */
   onSubmit?: (data: SignUpForm) => Promise<void> | void;
-  /** ID 중복확인 핸들러(가용하면 true). 미지정 시 모의 함수 사용 */
-  onCheckId?: (username: string) => Promise<boolean>;
-  /** Email 중복확인 핸들러(가용하면 true). 미지정 시 모의 함수 사용 */
-  onCheckEmail?: (email: string) => Promise<boolean>;
+  onCheckId: (username: string) => Promise<boolean>;
+  onCheckEmail: (email: string) => Promise<boolean>;
+  errors?: LocalErrors;
+  onClearError?: (field: keyof LocalErrors) => void;
 };
-
-/* ===== 모의(샘플) 중복확인 핸들러 ===== */
-async function mockCheckId(username: string): Promise<boolean> {
-  await new Promise((r) => setTimeout(r, 500));
-  return username.trim().toLowerCase() !== "admin"; // 'admin'은 이미 사용중으로 가정
-}
-async function mockCheckEmail(email: string): Promise<boolean> {
-  await new Promise((r) => setTimeout(r, 500));
-  return !email.toLowerCase().endsWith("@blocked.com"); // 특정 도메인만 불가 예시
-}
 
 export default function SignUpCard({
   cardWidth = 360,
   onSubmit,
-  onCheckId = mockCheckId,
-  onCheckEmail = mockCheckEmail,
+  onCheckId,
+  onCheckEmail,
+  errors: externalErrors,
+  onClearError,
 }: SignUpCardProps) {
   const [form, setForm] = useState<SignUpForm>({
     username: "",
@@ -70,12 +61,16 @@ export default function SignUpCard({
     email: "",
     agree: false,
   });
-  const [errors, setErrors] = useState<Errors>({});
+
+  const [localErrors, setLocalErrors] = useState<LocalErrors>({});
   const [checkingId, setCheckingId] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [idChecked, setIdChecked] = useState<boolean | null>(null);
   const [emailChecked, setEmailChecked] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 외부 에러와 로컬 에러 병합(외부 에러 우선)
+  const uiErrors: LocalErrors = { ...localErrors, ...(externalErrors ?? {}) };
 
   // CSS 변수(--card-width) 주입
   type StyleVars = React.CSSProperties & { ["--card-width"]?: string };
@@ -87,89 +82,71 @@ export default function SignUpCard({
     [cardWidth]
   );
 
-  const set = <K extends keyof SignUpForm>(key: K, value: SignUpForm[K]) =>
+  const set = <K extends keyof SignUpForm>(key: K, value: SignUpForm[K]) => {
     setForm((s) => ({ ...s, [key]: value }));
-
-  const validate = (): boolean => {
-    const e: Errors = {};
-
-    if (!form.username.trim()) e.username = "아이디를 입력해주세요.";
-    if (form.password.length < 8)
-      e.password = "비밀번호는 8자 이상이어야 합니다.";
-    if (form.password2 !== form.password)
-      e.password2 = "비밀번호가 일치하지 않습니다.";
-    if (!form.name.trim()) e.name = "이름을 입력해주세요.";
-
-    const y = Number(form.birthYear);
-    const m = Number(form.birthMonth);
-    const d = Number(form.birthDay);
-    if (!(y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) {
-      e.birth = "생년월일을 올바르게 입력해주세요.";
-    }
-
-    if (!form.gender) e.gender = "성별을 선택해주세요.";
-
-    const emailOK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
-    if (!emailOK) e.email = "이메일 형식이 올바르지 않습니다.";
-
-    if (!form.agree) e.agree = "이용약관 동의가 필요합니다.";
-
-    setErrors(e);
-    return Object.keys(e).length === 0;
   };
 
+  /** 아이디 중복확인 */
   const handleCheckId = async () => {
-    setErrors((e) => ({ ...e, username: undefined }));
+    setLocalErrors((e) => ({ ...e, username: undefined }));
+    onClearError?.("username");
+
     if (!form.username.trim()) {
-      setErrors((e) => ({ ...e, username: "아이디를 입력해주세요." }));
+      const msg = "아이디를 입력해주세요.";
+      setLocalErrors((e) => ({ ...e, username: msg }));
       return;
     }
+
     setCheckingId(true);
     try {
       const ok = await onCheckId(form.username);
       setIdChecked(ok);
       if (!ok) {
-        setErrors((e) => ({ ...e, username: "이미 사용 중인 아이디입니다." }));
+        setLocalErrors((e) => ({ ...e, username: "이미 사용 중인 아이디입니다." }));
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "아이디 확인에 실패했습니다.";
+      setIdChecked(false);
+      setLocalErrors((e) => ({ ...e, username: msg }));
     } finally {
       setCheckingId(false);
     }
   };
 
+  /** 이메일 중복확인 */
   const handleCheckEmail = async () => {
-    setErrors((e) => ({ ...e, email: undefined }));
+    setLocalErrors((e) => ({ ...e, email: undefined }));
+    onClearError?.("email");
+
     const emailOK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
     if (!emailOK) {
-      setErrors((e) => ({ ...e, email: "이메일 형식이 올바르지 않습니다." }));
+      setLocalErrors((e) => ({ ...e, email: "이메일 형식이 올바르지 않습니다." }));
       return;
     }
+
     setCheckingEmail(true);
     try {
       const ok = await onCheckEmail(form.email);
       setEmailChecked(ok);
       if (!ok) {
-        setErrors((e) => ({ ...e, email: "이미 사용 중인 이메일입니다." }));
+        setLocalErrors((e) => ({ ...e, email: "이미 사용 중인 이메일입니다." }));
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "이메일 확인에 실패했습니다.";
+      setEmailChecked(false);
+      setLocalErrors((e) => ({ ...e, email: msg }));
     } finally {
       setCheckingEmail(false);
     }
   };
 
+  /** 제출: 유효성 검사는 상위에서 처리 */
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!validate()) return;
-
+    if (!onSubmit) return;
     setLoading(true);
     try {
-      if (onSubmit) {
-        await onSubmit(form);
-      } else {
-        await new Promise((r) => setTimeout(r, 600));
-        alert("회원가입이 완료되었습니다.");
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "회원가입에 실패했습니다.";
-      alert(msg);
+      await onSubmit(form);
     } finally {
       setLoading(false);
     }
@@ -181,8 +158,15 @@ export default function SignUpCard({
         <div className={styles.card}>
           <img src={logo} alt="MARKET STAGE" className={styles.logo} />
 
+          {/* 상단 공통 에러 */}
+          {uiErrors.general && (
+            <div className={styles.error} role="alert" style={{ marginBottom: 8 }}>
+              {uiErrors.general}
+            </div>
+          )}
+
           <form className={styles.form} onSubmit={submit} noValidate>
-            {/* 아이디: 입력칸 길이 ↓ + 버튼을 밖으로 */}
+            {/* 아이디 */}
             <div className={styles.row}>
               <label htmlFor="username" className={styles.label}>아이디</label>
               <div className={styles.inlineOut}>
@@ -195,6 +179,8 @@ export default function SignUpCard({
                   onChange={(e) => {
                     set("username", e.target.value);
                     setIdChecked(null);
+                    setLocalErrors((er) => ({ ...er, username: undefined }));
+                    onClearError?.("username");
                   }}
                 />
                 <button
@@ -209,7 +195,7 @@ export default function SignUpCard({
                 </button>
               </div>
             </div>
-            {errors.username && <p className={styles.error}>{errors.username}</p>}
+            {uiErrors.username && <p className={styles.error}>{uiErrors.username}</p>}
             {idChecked === true && <p className={styles.ok}>사용 가능한 아이디입니다.</p>}
 
             {/* 비밀번호 */}
@@ -222,10 +208,13 @@ export default function SignUpCard({
                 autoComplete="new-password"
                 placeholder="비밀번호"
                 value={form.password}
-                onChange={(e) => set("password", e.target.value)}
+                onChange={(e) => {
+                  set("password", e.target.value);
+                  onClearError?.("password");
+                }}
               />
             </div>
-            {errors.password && <p className={styles.error}>{errors.password}</p>}
+            {uiErrors.password && <p className={styles.error}>{uiErrors.password}</p>}
 
             {/* 비밀번호 확인 */}
             <div className={styles.row}>
@@ -237,10 +226,13 @@ export default function SignUpCard({
                 autoComplete="new-password"
                 placeholder="비밀번호 확인"
                 value={form.password2}
-                onChange={(e) => set("password2", e.target.value)}
+                onChange={(e) => {
+                  set("password2", e.target.value);
+                  onClearError?.("password2");
+                }}
               />
             </div>
-            {errors.password2 && <p className={styles.error}>{errors.password2}</p>}
+            {uiErrors.password2 && <p className={styles.error}>{uiErrors.password2}</p>}
 
             {/* 이름 */}
             <div className={styles.row}>
@@ -250,12 +242,15 @@ export default function SignUpCard({
                 className={styles.input}
                 placeholder="이름"
                 value={form.name}
-                onChange={(e) => set("name", e.target.value)}
+                onChange={(e) => {
+                  set("name", e.target.value);
+                  onClearError?.("name");
+                }}
               />
             </div>
-            {errors.name && <p className={styles.error}>{errors.name}</p>}
+            {uiErrors.name && <p className={styles.error}>{uiErrors.name}</p>}
 
-            {/* 생년월일 (연/월/일) */}
+            {/* 생년월일 */}
             <div className={styles.row}>
               <span className={styles.label}>생년월일</span>
               <div className={styles.triple}>
@@ -266,7 +261,10 @@ export default function SignUpCard({
                   inputMode="numeric"
                   maxLength={4}
                   value={form.birthYear}
-                  onChange={(e) => set("birthYear", e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => {
+                    set("birthYear", e.target.value.replace(/\D/g, ""));
+                    onClearError?.("birth");
+                  }}
                 />
                 <input
                   id="birthMonth"
@@ -275,7 +273,10 @@ export default function SignUpCard({
                   inputMode="numeric"
                   maxLength={2}
                   value={form.birthMonth}
-                  onChange={(e) => set("birthMonth", e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => {
+                    set("birthMonth", e.target.value.replace(/\D/g, ""));
+                    onClearError?.("birth");
+                  }}
                 />
                 <input
                   id="birthDay"
@@ -284,11 +285,14 @@ export default function SignUpCard({
                   inputMode="numeric"
                   maxLength={2}
                   value={form.birthDay}
-                  onChange={(e) => set("birthDay", e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => {
+                    set("birthDay", e.target.value.replace(/\D/g, ""));
+                    onClearError?.("birth");
+                  }}
                 />
               </div>
             </div>
-            {errors.birth && <p className={styles.error}>{errors.birth}</p>}
+            {uiErrors.birth && <p className={styles.error}>{uiErrors.birth}</p>}
 
             {/* 성별 */}
             <div className={styles.row}>
@@ -297,16 +301,19 @@ export default function SignUpCard({
                 id="gender"
                 className={styles.select}
                 value={form.gender}
-                onChange={(e) => set("gender", e.target.value as SignUpForm["gender"])}
+                onChange={(e) => {
+                  set("gender", e.target.value as SignUpForm["gender"]);
+                  onClearError?.("gender");
+                }}
               >
                 <option value="">선택</option>
                 <option value="male">남성</option>
                 <option value="female">여성</option>
               </select>
             </div>
-            {errors.gender && <p className={styles.error}>{errors.gender}</p>}
+            {uiErrors.gender && <p className={styles.error}>{uiErrors.gender}</p>}
 
-            {/* 이메일: 입력칸 길이 ↓ + 버튼을 밖으로 */}
+            {/* 이메일 */}
             <div className={styles.row}>
               <label htmlFor="email" className={styles.label}>이메일</label>
               <div className={styles.inlineOut}>
@@ -320,6 +327,8 @@ export default function SignUpCard({
                   onChange={(e) => {
                     set("email", e.target.value);
                     setEmailChecked(null);
+                    setLocalErrors((er) => ({ ...er, email: undefined }));
+                    onClearError?.("email");
                   }}
                 />
                 <button
@@ -334,7 +343,7 @@ export default function SignUpCard({
                 </button>
               </div>
             </div>
-            {errors.email && <p className={styles.error}>{errors.email}</p>}
+            {uiErrors.email && <p className={styles.error}>{uiErrors.email}</p>}
             {emailChecked === true && <p className={styles.ok}>사용 가능한 이메일입니다.</p>}
 
             {/* 약관 동의 */}
@@ -342,11 +351,14 @@ export default function SignUpCard({
               <input
                 type="checkbox"
                 checked={form.agree}
-                onChange={(e) => set("agree", e.target.checked)}
+                onChange={(e) => {
+                  set("agree", e.target.checked);
+                  onClearError?.("agree");
+                }}
               />
               <span>이용약관 개인정보 수집 및 정보이용에 동의합니다.</span>
             </label>
-            {errors.agree && <p className={styles.error}>{errors.agree}</p>}
+            {uiErrors.agree && <p className={styles.error}>{uiErrors.agree}</p>}
 
             {/* 제출 */}
             <button className={styles.submit} type="submit" disabled={loading}>
