@@ -1,3 +1,4 @@
+// src/components/Auth/ChangePassword/ChangePWcARD/ChangePasswordCard.tsx
 import { useMemo, useState, type CSSProperties } from "react";
 import styles from "./ChangePasswordCard.module.css";
 
