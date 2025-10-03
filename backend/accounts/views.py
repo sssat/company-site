@@ -41,6 +41,8 @@
 # 즉, views.py 전체 파일을 통째로 뷰라고 부르는 것이 아니라, 각 엔드포인트를 처리하는 개별 클래스나 함수를 뷰라고 부른다.
 # ─────────────────────────────────────────────────────────────────────────────
 
+from email.header import Header
+from django.core.mail import EmailMultiAlternatives
 from typing import Any, Dict, List
 from django.core import signing
 from .models import User, UserLevel, LoginLog
@@ -557,8 +559,9 @@ class LoginView(APIView):
             raw_password=str(data.get("password", "")) if isinstance(data, dict) else "",
         )
 
-        secure = not settings.DEBUG         # 개발(HTTP)에서는 False
-        samesite = "Lax" if settings.DEBUG else "Strict"
+        # 수정 (프론트/백엔드가 서로 다른 도메인이라면 무조건 이렇게)
+        secure = True                 # HTTPS만
+        samesite = "None"             # 교차 출처 전송 허용
 
         resp.set_cookie(
             key="refresh",                            # 쿠키 이름
@@ -694,9 +697,9 @@ class FindPasswordView(APIView):
         return "".join(secrets.choice(alphabet) for _ in range(length))
 
     def _frontend_base(self, request) -> str:
-        base = getattr(settings, "FRONTEND_BASE_URL", None)
+        base = (getattr(settings, "FRONTEND_BASE_URL", "") or "").strip().rstrip("/")
         if base:
-            return base.rstrip("/")
+            return base
         return request.build_absolute_uri("/").rstrip("/")
 
     def post(self, request, *args, **kwargs):
