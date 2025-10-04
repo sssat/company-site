@@ -1,3 +1,4 @@
+// src/pages/AuthPage/SignUpPage/SignUpPage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -294,7 +295,13 @@ export default function SignUpPage() {
         /** 에러 내려주기 */
         errors={errors}
         /** 인풋 변경 시 해당 에러 지우기 */
-        onClearError={(field) => setErrors((prev) => ({ ...prev, [field]: undefined }))}
+        onClearError={(field) =>
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next[field];        // 키 자체 제거
+            return next;
+          })
+        }
       />
     </main>
   );

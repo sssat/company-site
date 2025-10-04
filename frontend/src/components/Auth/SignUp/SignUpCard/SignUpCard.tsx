@@ -1,3 +1,4 @@
+// src/components/Auth/SignUp/SignUpCard/SignUpCard.tsx
 import { useMemo, useState } from "react";
 import styles from "./SignUpCard.module.css";
 import logo from "../../../../assets/company_logo/company_logo.svg";
@@ -70,7 +71,13 @@ export default function SignUpCard({
   const [loading, setLoading] = useState(false);
 
   // 외부 에러와 로컬 에러 병합(외부 에러 우선)
-  const uiErrors: LocalErrors = { ...localErrors, ...(externalErrors ?? {}) };
+  const uiErrors: LocalErrors = useMemo(() => {
+  const cleanExternal = Object.fromEntries(
+    Object.entries(externalErrors ?? {}).filter(([, v]) => v != null && v !== "")
+  ) as LocalErrors;
+  // 외부 에러가 있을 때만(실제 문자열일 때만) 로컬을 덮어쓰게 유지
+  return { ...localErrors, ...cleanExternal };
+}, [externalErrors, localErrors]);
 
   // CSS 변수(--card-width) 주입
   type StyleVars = React.CSSProperties & { ["--card-width"]?: string };
