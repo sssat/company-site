@@ -426,10 +426,10 @@ class RegisterRequestSerializer(serializers.ModelSerializer):
 
         # 만 나이 계산
         age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
-        if age < 14:
+        if age < 14 and age >= 0:
             raise serializers.ValidationError("만 14세 이상만 가입할 수 있습니다.")
-        if age > 120:
-            raise serializers.ValidationError("생년월일을 다시 확인해주세요.")
+        elif age < 0 or age >= 120:
+            raise serializers.ValidationError("생년월일이 올바르지 않습니다.")
         return v
 
     # ── 3. 비밀번호 정책 헬퍼함수 ────────────────────────────────────────────────────
@@ -710,7 +710,7 @@ class FindIdResponseSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────
-# 12. 비밀번호 찾기 - requset 시리얼라이저
+# 12. 비밀번호 찾기 - request 시리얼라이저 (이름+아이디+이메일 모두 일치해야 성공)
 # 수행 기능: 역직렬화 + 유효성 체크
 # ─────────────────────────────────────────────────────────
 class FindPasswordRequestSerializer(serializers.Serializer):
@@ -718,24 +718,42 @@ class FindPasswordRequestSerializer(serializers.Serializer):
         max_length=50,
         trim_whitespace=True,
         write_only=True,
-        allow_blank=False
+        allow_blank=False,
+    )
+    name = serializers.CharField(                     # 추가: 이름
+        max_length=50,
+        trim_whitespace=True,
+        write_only=True,
+        allow_blank=False,
+    )
+    email = serializers.EmailField(                   # 추가: 이메일
+        max_length=254,
+        write_only=True,
+        allow_blank=False,
     )
 
     default_error_messages = {
-        "not_found": "가입되지 않은 사용자입니다.",
+        "not_found": "이름/아이디/이메일이 일치하는 사용자가 없습니다.",
     }
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
-        uid = attrs["user_id"]
+        uid = attrs["user_id"].strip()
+        name = attrs["name"].strip()
+        email = attrs["email"].strip()
 
+        # 이름/아이디/이메일 모두 일치하는 사용자만 통과 (이메일/이름 대소문자 무시)
         user = (
-            User.objects.filter(user_id=uid)        # User 테이블에서 user_id가 uid와 동일한 사용자를 조회
-            .only("user_seq", "user_id", "email")   # SQL SELECT 쿼리에서 이 세 컬럼만 가져오도록 제한
-            .first()                                # 조건을 만족하는 첫 번째 객체를 반환 -> 없으면 None 반환
+            User.objects.filter(
+                user_id=uid,
+                email__iexact=email,
+                user_name__iexact=name,   # ← 프로젝트에서 이름 컬럼명이 다르면 여기 수정
+            )
+            .only("user_seq", "user_id", "email", "user_name")
+            .first()
         )
 
-        # 조회 결과가 없다면 NotFound 예외 발생 -> HTTP 404 응답 반환
         if not user:
+            # 404로 통일된 메시지 반환
             raise NotFound(detail={"message": self.error_messages["not_found"]})
 
         attrs["user"] = user

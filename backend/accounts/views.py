@@ -710,22 +710,25 @@ class FindPasswordView(APIView):
             return Response({"message": "잘못된 요청입니다."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # 2) 유효성 검증 및 사용자 resolve
+        # 2) 유효성 검증 및 사용자 resolve (이름+아이디+이메일 모두 검사)
         s = FindPasswordRequestSerializer(data=data)
         try:
             s.is_valid(raise_exception=True)
         except NotFound as nf:
             detail = getattr(nf, "detail", {})
-            return Response(detail if isinstance(detail, dict)
-                            else {"message": "가입되지 않은 사용자입니다."},
-                            status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                detail if isinstance(detail, dict)
+                else {"message": "이름/아이디/이메일이 일치하는 사용자가 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except ValidationError as exc:
             return Response({"errors": exc.detail},
                             status=status.HTTP_400_BAD_REQUEST)
 
         user = s.validated_data["user"]
 
-        # 이메일이 있어야 발송 가능
+        # (선택) 아래 체크는 이메일 일치로 이미 거른 상태라 보통 불필요하지만
+        # DB에 None/빈값 가능성이 있으면 방어적으로 유지 가능
         if not getattr(user, "email", None):
             return Response({"message": "가입된 이메일이 없습니다."},
                             status=status.HTTP_404_NOT_FOUND)
@@ -733,7 +736,7 @@ class FindPasswordView(APIView):
         # 3) 임시 비밀번호 생성
         temp_password = self._gen_temp_password(10)
 
-        # 4) 메일 본문 구성(로그인/비번변경 경로는 선택)
+        # 4) 메일 본문 구성
         base_url = self._frontend_base(request)
         login_url = f"{base_url}/login"
 
@@ -750,8 +753,6 @@ class FindPasswordView(APIView):
         try:
             with transaction.atomic():
                 update_fields = []
-
-                # 프로젝트별 컬럼명 대응 (password_hash 우선, 없으면 password)
                 if hasattr(user, "password_hash"):
                     user.password_hash = make_password(temp_password)
                     update_fields.append("password_hash")
@@ -759,11 +760,9 @@ class FindPasswordView(APIView):
                     user.password = make_password(temp_password)
                     update_fields.append("password")
                 else:
-                    # 마지막 안전장치(대부분 필요 없음)
                     user.password = make_password(temp_password)
                     update_fields.append("password")
 
-                # 비번 변경 시각 필드가 있다면 같이 업데이트
                 if hasattr(user, "password_changed_at"):
                     user.password_changed_at = timezone.now()
                     update_fields.append("password_changed_at")
