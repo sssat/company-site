@@ -84,8 +84,8 @@ export function validateBirth(y: string, m: string, d: string): string | null {
 
   const age = todayY - yyyy - ((todayM < mm) || (todayM === mm && todayD < dd) ? 1 : 0);
 
-  if (age < 14) return "만 14세 이상만 가입할 수 있습니다.";
-  if (age > 120) return "생년월일이 올바르지 않습니다.";
+  if (age < 14 && age >= 0) return "만 14세 이상만 가입할 수 있습니다.";
+  if (age < 0 || age >= 120) return "생년월일이 올바르지 않습니다.";
   return null;
 }
 
