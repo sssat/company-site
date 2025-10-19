@@ -1,54 +1,57 @@
-// src/pages/AuthPage/FindIdPage.tsx
+// src/pages/AuthPage/FindIdPage/FindIdPage.tsx
 import { useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import FindIdCard from "../../../components/Auth/FindID/FindIDCard/FindIdCard";
 
-// const API_FIND_ID = "/api/auth/find-id"; // 백엔드 붙일 때 사용
+import axios, { AxiosError } from "axios";
+import { findId, type FindIdRequest, type FindIdResponse } from "../../../api/accountsApi";
 
 export default function FindIdPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "아이디 찾기";
+    document.title = "아이디 찾기 | Market Stage";
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, []);
 
   const handleSubmit = useCallback(
     async ({ name, email }: { name: string; email: string }) => {
-      // ----- [데모 분기] 입력에 특정 키워드가 있으면 '실패' 페이지로 보냄 -----
-      const shouldFail =
-        /fail|없음|nomatch/i.test(name ?? "") ||
-        /fail|없음|nomatch/i.test(email ?? "");
+      const trimmedName = (name ?? "").trim();
+      const trimmedEmail = (email ?? "").trim();
 
-      if (shouldFail) {
-        navigate("/find-id/fail", {
-          state: { message: "조회결과가 없습니다." },
-        });
+      if (!trimmedName || !trimmedEmail) {
+        alert("이름과 이메일을 모두 입력하세요.");
         return;
       }
 
-      // ----- [실제 연동 시] 서버 응답에 따라 성공/실패 라우팅 -----
-      // const res = await fetch(API_FIND_ID, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ name: name.trim(), email: email.trim() }),
-      // });
-      // if (!res.ok) {
-      //   navigate("/find-id/result/fail", { state: { message: "조회결과가 없습니다." }});
-      //   return;
-      // }
-      // const data = await res.json();
-      // if (!data?.userId) {
-      //   navigate("/find-id/result/fail", { state: { message: "조회결과가 없습니다." }});
-      //   return;
-      // }
-      // navigate("/find-id/result", { state: { userId: data.userId } });
+      const payload: FindIdRequest = { name: trimmedName, email: trimmedEmail }; // name으로 전송
 
-      // ----- [데모 성공 동작] 키워드가 없을 때만 성공 페이지로 -----
-      const userId =
-        (name?.trim() || (email.includes("@") ? email.split("@")[0] : "")).trim() ||
-        "Esggs123";
-      navigate("/find-id/success", { state: { userId } });
+      try {
+        const res: FindIdResponse = await findId(payload);
+        // 성공: 서버가 내려준 user_id로 성공 페이지 이동
+        navigate("/find-id/success", { state: { userId: res.user_id }, replace: false });
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          const ax = err as AxiosError<{ message?: string; detail?: string }>;
+          if (ax.response?.status === 404) {
+            navigate("/find-id/fail", {
+              state: { message: ax.response.data?.message ?? "조회 결과가 없습니다." },
+              replace: false, 
+            });
+            return;
+          }
+          alert(
+            ax.response?.data?.message ??
+              ax.response?.data?.detail ??
+              ax.message ??
+              "아이디 찾기에 실패했습니다."
+          );
+        } else if (err instanceof Error) {
+          alert(err.message);
+        } else {
+          alert("아이디 찾기에 실패했습니다.");
+        }
+      }
     },
     [navigate]
   );
