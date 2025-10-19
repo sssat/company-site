@@ -35,12 +35,21 @@ export default function FindIdCard({
 
   const validate = () => {
     const e: typeof errors = {};
-    if (!name.trim()) e.name = "이름을 입력해주세요.";
-    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!ok) e.email = "이메일 형식이 올바르지 않습니다.";
+    const nameTrim = name.trim();
+    const emailTrim = email.trim();
+
+    if (!nameTrim) e.name = "이름을 입력해주세요.";
+
+    if (!emailTrim) {
+      e.email = "이메일을 입력해주세요.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      e.email = "이메일 형식이 올바르지 않습니다.";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
+
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
