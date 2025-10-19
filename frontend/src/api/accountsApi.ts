@@ -14,7 +14,7 @@
 
 // [아이디/비번 찾기]
 // - POST /api/auth/find-id/              -> 아이디 찾기 (이름+이메일로 user_id 회신)
-// - POST /api/auth/find-password/        -> 비밀번호 찾기 (임시 비밀번호 발급 후 회신)
+// - POST /api/auth/find-password/        -> 비밀번호 찾기 (이름+아이디+이메일 모두 일치 시 임시 비밀번호 발급)
 
 // [관리자]
 // - GET  /api/admins/users/              -> 회원 목록 조회 (page, size 쿼리 지원; 슈퍼관리자 권한 필요)
@@ -87,12 +87,16 @@ export interface FindIdRequest {
 export interface FindIdResponse {
   user_id: string;
 }
+
+/** 수정: 비밀번호 찾기 요청/응답 타입 */
 export interface FindPasswordRequest {
-  user_id: string; // email 불필요
+  user_id: string;
+  name: string;
+  email: string;
 }
 export interface FindPasswordResponse {
   message: string;
-  temp_password: string;
+  temp_password?: string; // DEBUG 모드에서만 내려올 수 있으므로 선택적
 }
 
 /** 로그아웃 */
@@ -220,6 +224,7 @@ export async function findId(payload: FindIdRequest) {
   return res.data;
 }
 
+/** 수정: 이름+아이디+이메일 모두 전송 */
 export async function findPassword(payload: FindPasswordRequest) {
   const res = await http.post<FindPasswordResponse>("/api/auth/find-password/", payload);
   return res.data;
