@@ -41,8 +41,6 @@
 # 즉, views.py 전체 파일을 통째로 뷰라고 부르는 것이 아니라, 각 엔드포인트를 처리하는 개별 클래스나 함수를 뷰라고 부른다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-from email.header import Header
-from django.core.mail import EmailMultiAlternatives
 from typing import Any, Dict, List
 from django.core import signing
 from .models import User, UserLevel, LoginLog
@@ -53,6 +51,8 @@ from django.contrib.auth.hashers import make_password
 import hashlib
 import logging
 logger: logging.Logger = logging.getLogger(__name__)
+import re
+from django.db.models import Q
 
 # Django 프로젝트의 설정값을 코드에서 사용하기 위해 가져옴
 from django.conf import settings
@@ -237,6 +237,31 @@ def _first_error_message(errs: Dict[str, List[Dict[str, str]]]) -> str:
     if isinstance(val, dict) and "message" in val:
         return str(val.get("message")) or "잘못된 요청입니다."
     return "잘못된 요청입니다."
+
+
+# 역할 힌트를 문장 전체에서 추출 (띄어쓰기/오타/한글 포함)
+def _role_code_hint_from_query(q: str):
+    s = (q or "")
+    s_lower = s.lower()
+    s_norm = re.sub(r"\s+", "", s_lower)  # "super admin" -> "superadmin"
+
+    # super admin 우선 매칭
+    if "superadmin" in s_norm or ("super" in s_lower and "admin" in s_lower) or ("슈퍼" in s) or ("최고" in s):
+        return 2
+    # admin
+    if "admin" in s_norm or "amdin" in s_norm or ("관리자" in s) or ("어드민" in s):
+        return 1
+    # user
+    if "user" in s_norm or ("일반" in s) or ("유저" in s):
+        return 0
+    return None
+
+# 개별 단어가 '역할 단어'인지 (terms AND에서 제외할지 판단)
+_ROLE_WORDS = {"super", "admin", "amdin", "user", "슈퍼", "최고", "관리자", "어드민", "일반", "유저"}
+def _is_role_word(term: str) -> bool:
+    t = term.strip().lower()
+    return t in _ROLE_WORDS
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -962,10 +987,11 @@ class AdminDemoteView(APIView):
 
 # ─────────────────────────────────────────────────────────
 # 12. 회원 목록 조회 - 클래스형 뷰
-# GET /api/admins/users/
+# GET /api/admins/users/?page=1&size=10&q=검색어
+#   - q: 공백 AND
+#   - 검색 대상: user_id, user_name, grade_name, grade_code(숫자/역할키워드)
 # ─────────────────────────────────────────────────────────
 class UserListView(APIView):
-    # 커스텀 메시지(401/403)를 컨트롤하기 위해 AllowAny 사용 후 직접 체크
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, *args, **kwargs):
@@ -974,51 +1000,88 @@ class UserListView(APIView):
         if not user:
             return Response({"message": "로그인이 필요합니다."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        level = getattr(getattr(user, "grade_code", None), "grade_code", 0)  # 0: USER, 1: ADMIN, 2: SUPER_ADMIN 가정
+        level = getattr(getattr(user, "grade_code", None), "grade_code", 0)
         if level < 1:
             return Response({"message": "관리자만 접근할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
 
-        # (B) 쿼리 파라미터(page, size) 파싱/검증
+        # (B) 파라미터
         qp = request.query_params
         try:
             page = int(qp.get("page", "1"))
             size = int(qp.get("size", "10"))
         except ValueError:
             return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
-
         if page < 1 or size < 1:
             return Response({"message": "잘못된 요청입니다."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # (선택) size 상한
         if size > 100:
             size = 100
+        q = (qp.get("q") or "").strip()
 
-        # (C) 조회 + 페이지네이션
+        # (C) 기본 queryset
         qs = (
             User.objects.select_related("grade_code")
-            .order_by("-user_seq")  # 최신 가입 순 (원하면 user_seq 오름차순 등으로 변경)
+            .order_by("-user_seq")
         )
 
+        # (D) 검색
+        if q:
+            role_hint = _role_code_hint_from_query(q)  # 문장 전체에서 역할 추출
+
+            terms = [t for t in re.split(r"\s+", q) if t]
+            text_cond = Q()
+            has_text_cond = False
+
+            for term in terms:
+                # 역할 단어는 개별 AND에서 제외(역할은 role_hint로 처리)
+                if _is_role_word(term):
+                    continue
+
+                t = (
+                    Q(user_id__icontains=term)
+                    | Q(user_name__icontains=term)
+                    | Q(grade_code__grade_name__icontains=term)
+                )
+
+                # 숫자 0/1/2를 코드로도 허용
+                if term.isdigit():
+                    code_int = int(term)
+                    if code_int in (0, 1, 2):
+                        t = t | Q(grade_code__grade_code=code_int)
+
+                text_cond = t if not has_text_cond else (text_cond & t)
+                has_text_cond = True
+
+            # 최종 필터 조합: (역할 힌트) AND (나머지 일반 키워드 AND)
+            final_cond = Q()
+            if role_hint is not None:
+                final_cond &= Q(grade_code__grade_code=role_hint)
+            if has_text_cond:
+                final_cond &= text_cond
+
+            if final_cond:
+                qs = qs.filter(final_cond)
+
+
+        # (E) 페이지네이션
         total_count = qs.count()
         total_pages = math.ceil(total_count / size) if total_count else 0
-
         start = (page - 1) * size
         end = start + size
         rows = qs[start:end]
 
-        # (D) items 구성
+        # (F) items
         items = []
         for u in rows:
             g = getattr(u, "grade_code", None)
             items.append({
-                "user_seq": getattr(u, "user_seq"),
-                "user_id": getattr(u, "user_id"),
-                "user_name": getattr(u, "user_name"),
+                "user_seq": u.user_seq,
+                "user_id": u.user_id,
+                "user_name": u.user_name,
                 "grade_code": getattr(g, "grade_code", 0),
                 "grade_name": getattr(g, "grade_name", ""),
             })
 
-        # (E) 응답 직렬화 및 반환
+        # (G) 응답
         payload = {
             "items": items,
             "page": page,
