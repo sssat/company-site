@@ -29,16 +29,24 @@ export default function LoginCard({ onSubmit, cardWidth }: LoginCardProps) {
     e.preventDefault();
     setError(null);
 
+    const uid = username.trim();
+
+    // 대문자 사용 금지: 즉시 경고 후 중단
+    if (/[A-Z]/.test(uid)) {
+      alert("아이디에는 대문자를 사용할 수 없습니다.");
+      return;
+    }
+
     try {
       setLoading(true);
 
       if (onSubmit) {
         // 외부 주입 로그인 로직 사용
-        await onSubmit(username.trim(), password);
+        await onSubmit(uid, password);
       } else {
         // 데모 기본 동작(외부 onSubmit이 없을 때만)
         await new Promise((r) => setTimeout(r, 600));
-        alert(`로그인(샘플)\n아이디: ${username}\n비밀번호: ${"*".repeat(password.length)}`);
+        alert(`로그인(샘플)\n아이디: ${uid}\n비밀번호: ${"*".repeat(password.length)}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "로그인에 실패했습니다.";
@@ -65,7 +73,7 @@ export default function LoginCard({ onSubmit, cardWidth }: LoginCardProps) {
             <input
               id="login-username"
               className={styles.input}
-              placeholder="아이디 (예: admin01 / user77)"
+              placeholder="아이디"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
@@ -105,3 +113,4 @@ export default function LoginCard({ onSubmit, cardWidth }: LoginCardProps) {
     </section>
   );
 }
+
