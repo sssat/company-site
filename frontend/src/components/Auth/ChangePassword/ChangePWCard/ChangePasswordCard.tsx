@@ -2,6 +2,13 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import styles from "./ChangePasswordCard.module.css";
 
+type FieldErrors = {
+  currentPassword?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+  general?: string;
+};
+
 type Props = {
   /** 카드 폭(px 또는 css 값). 기본 420 */
   cardWidth?: number | string;
@@ -11,19 +18,37 @@ type Props = {
     newPassword: string;
     confirmPassword: string;
   }) => Promise<void> | void;
+  /** 외부(페이지)에서 내려주는 에러(서버/상위 검증) */
+  errors?: FieldErrors;
+  /** 인풋 변경 시 해당 에러를 지우기 위한 콜백 */
+  onClearError?: (field: keyof FieldErrors) => void;
 };
 
-export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props) {
+export default function ChangePasswordCard({
+  cardWidth = 420,
+  onSubmit,
+  errors: externalErrors,
+  onClearError,
+}: Props) {
   // ───────────────── 상태 ─────────────────
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{
+  const [localErrors, setLocalErrors] = useState<{
     currentPassword?: string;
     newPassword?: string;
     confirmPassword?: string;
+    general?: string;
   }>({});
+
+  // 외부 에러와 로컬 에러 병합(외부 에러 우선)
+  const uiErrors: FieldErrors = useMemo(() => {
+    const cleanExternal = Object.fromEntries(
+      Object.entries(externalErrors ?? {}).filter(([, v]) => v != null && v !== "")
+    ) as FieldErrors;
+    return { ...localErrors, ...cleanExternal };
+  }, [externalErrors, localErrors]);
 
   // CSS 변수(카드 폭)
   type Vars = CSSProperties & { ["--card-width"]?: string };
@@ -34,14 +59,14 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
 
   // ───────────────── 검증 ─────────────────
   const validate = () => {
-    const e: typeof errors = {};
+    const e: typeof localErrors = {};
     if (!currentPassword) e.currentPassword = "현재 비밀번호를 입력해주세요.";
     if (!newPassword) e.newPassword = "새 비밀번호를 입력해주세요.";
     if (!confirmPassword) e.confirmPassword = "새 비밀번호를 한 번 더 입력해주세요.";
     if (newPassword && confirmPassword && newPassword !== confirmPassword) {
       e.confirmPassword = "비밀번호가 일치하지 않습니다.";
     }
-    setErrors(e);
+    setLocalErrors(e);
     return Object.keys(e).length === 0;
   };
 
@@ -60,6 +85,7 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
       } else {
         // 데모 동작
         await new Promise((r) => setTimeout(r, 500));
+        // 성공 시에는 외부에서 라우팅 처리한다고 가정
         alert("비밀번호가 변경되었습니다.");
       }
     } finally {
@@ -73,6 +99,13 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
         <div className={styles.card}>
           <h1 className={styles.title}>비밀번호 변경</h1>
 
+          {/* 상단 공통 에러 */}
+          {uiErrors.general && (
+            <div className={styles.error} role="alert" style={{ marginBottom: 8 }}>
+              {uiErrors.general}
+            </div>
+          )}
+
           <form className={styles.form} onSubmit={submit} noValidate>
             {/* 현재 비밀번호 */}
             <div className={styles.field}>
@@ -84,10 +117,14 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
                   type="password"
                   placeholder="현재 비밀번호를 입력하세요"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    setLocalErrors((er) => ({ ...er, currentPassword: undefined }));
+                    onClearError?.("currentPassword");
+                  }}
                   autoComplete="current-password"
                 />
-                {errors.currentPassword && <p className={styles.error}>{errors.currentPassword}</p>}
+                {uiErrors.currentPassword && <p className={styles.error}>{uiErrors.currentPassword}</p>}
               </div>
             </div>
 
@@ -101,10 +138,14 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
                   type="password"
                   placeholder="새 비밀번호를 입력하세요"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    setLocalErrors((er) => ({ ...er, newPassword: undefined }));
+                    onClearError?.("newPassword");
+                  }}
                   autoComplete="new-password"
                 />
-                {errors.newPassword && <p className={styles.error}>{errors.newPassword}</p>}
+                {uiErrors.newPassword && <p className={styles.error}>{uiErrors.newPassword}</p>}
               </div>
             </div>
 
@@ -118,10 +159,14 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
                   type="password"
                   placeholder="새 비밀번호를 한 번 더 입력하세요"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setLocalErrors((er) => ({ ...er, confirmPassword: undefined }));
+                    onClearError?.("confirmPassword");
+                  }}
                   autoComplete="new-password"
                 />
-                {errors.confirmPassword && <p className={styles.error}>{errors.confirmPassword}</p>}
+                {uiErrors.confirmPassword && <p className={styles.error}>{uiErrors.confirmPassword}</p>}
               </div>
             </div>
 
@@ -134,3 +179,4 @@ export default function ChangePasswordCard({ cardWidth = 420, onSubmit }: Props)
     </section>
   );
 }
+
