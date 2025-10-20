@@ -1,40 +1,75 @@
+// src/pages/PublicPage/MediaPage/NewsCreatePage.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./NewsCreatePage.module.css";
-import { useAuth } from "../../../hooks/useAuth"; // 관리자 체크
+import { useAuth } from "../../../hooks/useAuth";
+import {
+  createNews,
+  type NewsCreateBody,
+  type NewsCategoryData, // 데이터 타입만 사용
+  getNewsUploadUrl,
+  uploadToS3Put,
+} from "../../../api/newsApi";
 
 type Category = "internal" | "external";
 
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  return "오류가 발생했습니다.";
+}
+
 export default function NewsCreatePage() {
   const nav = useNavigate();
-  const { isAuthenticated, role } = useAuth();
+
+  // ── 권한
+  const { auth } = useAuth();
+  const isAuthenticated = auth.isAuthed;
+  const role = auth.role;
   const isManager = isAuthenticated && (role === "ADMIN" || role === "SUPER_ADMIN");
 
-  // 폼 상태
-  const [author, setAuthor] = useState("");
-  const [title, setTitle] = useState("");
-  const [excerpt, setExcerpt] = useState("");            // 요약 추가
-  const [content, setContent] = useState("");
-  const [category, setCategory] = useState<Category>("internal");
+  // ── (중복 alert 방지용) 경고 여부
+  const warnedRef = useRef(false);
 
-  // 대표 이미지(썸네일)
+  // ── 폼 상태
+  const [author, setAuthor] = useState<string>("");
+  const [title, setTitle] = useState<string>("");
+  const [excerpt, setExcerpt] = useState<string>("");
+  const [content, setContent] = useState<string>("");
+  const [category, setCategory] = useState<Category>("internal");
+  const [badge, setBadge] = useState<string>(""); // 필수: 비어있으면 제출 불가
+
+  // ── 대표 이미지 업로드(썸네일)
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageKey, setImageKey] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
 
-  // 본문 이미지 삽입을 위한 ref/input
+  // ── 본문 이미지
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
-  const [inlinePreviews, setInlinePreviews] = useState<string[]>([]); // blob url 목록
+  const [inlinePreviews, setInlinePreviews] = useState<string[]>([]); // public_url 목록
 
-  // 비관리자 접근 시 목록으로 되돌리기
+  // ── 제출 로딩
+  const [saving, setSaving] = useState<boolean>(false);
+
+  // ── 접근 가드: 빈 화면 + alert 후 리다이렉트 (StrictMode 중복 방지)
   useEffect(() => {
+    if (warnedRef.current) return;
+    if (!isAuthenticated) {
+      warnedRef.current = true;
+      alert("로그인이 필요합니다.");
+      nav("/login", { replace: true });
+      return;
+    }
     if (!isManager) {
+      warnedRef.current = true;
       alert("관리자만 접근할 수 있습니다.");
       nav("/media", { replace: true });
     }
-  }, [isManager, nav]);
+  }, [isAuthenticated, isManager, nav]);
 
-  // 대표이미지 미리보기 URL 관리
+  // ── 로컬 선택 시 임시 미리보기(대표 이미지 전용)
   useEffect(() => {
     if (!file) {
       setPreviewUrl(null);
@@ -45,98 +80,176 @@ export default function NewsCreatePage() {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // 페이지 이탈 시 본문 blob url 정리
-  useEffect(() => {
-    return () => {
-      inlinePreviews.forEach((u) => URL.revokeObjectURL(u));
-    };
-  }, [inlinePreviews]);
+  // ── 배지 포함 필수값 체크
+  const canSubmit = useMemo<boolean>(() => {
+    return (
+      title.trim() !== "" &&
+      excerpt.trim() !== "" &&
+      content.trim() !== "" &&
+      badge.trim() !== ""
+    );
+  }, [title, excerpt, content, badge]);
 
-  // 간단 유효성 검사 (요약까지 포함)
-  const canSubmit = useMemo(() => {
-    return author.trim() && title.trim() && excerpt.trim() && content.trim();
-  }, [author, title, excerpt, content]);
+  /* ===================== 업로드 유틸 ===================== */
 
-  // 대표 이미지 선택/취소
-  const onChangeFile: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const f = e.target.files && e.target.files[0];
-    setFile(f ?? null);
+  /** 대표 이미지(썸네일) 업로드: 항상 kind=thumbnail */
+  const uploadCoverToS3 = async (f: File) => {
+    const max = 10 * 1024 * 1024;
+    if (f.size > max) throw new Error("이미지 용량은 10MB 이하만 업로드할 수 있습니다.");
+
+    setUploading(true);
+    try {
+      const { upload_url, key, public_url, content_type } = await getNewsUploadUrl(
+        f.name,
+        f.type || "application/octet-stream",
+        "thumbnail"
+      );
+      await uploadToS3Put(upload_url, f, content_type);
+      setImageKey(key);
+      if (public_url) setPreviewUrl(public_url);
+    } finally {
+      setUploading(false);
+    }
   };
-  const clearFile = () => setFile(null);
 
-  // ===== 본문 이미지 삽입 =====
+  /** 본문 이미지 업로드: 항상 kind=content, 업로드 후 본문에 <img src="public_url"> 삽입 */
+  const uploadInlineImages = async (files: FileList) => {
+    for (const f of Array.from(files)) {
+      const max = 10 * 1024 * 1024;
+      if (f.size > max) {
+        alert(`"${f.name}"은(는) 10MB를 초과합니다.`);
+        continue;
+      }
+      try {
+        const { upload_url, public_url, content_type } = await getNewsUploadUrl(
+          f.name,
+          f.type || "application/octet-stream",
+          "content"
+        );
+        await uploadToS3Put(upload_url, f, content_type);
+        insertAtCursor(`<img src="${public_url}" alt="${f.name}" />\n`);
+        setInlinePreviews((prev) => [...prev, public_url]);
+      } catch (err) {
+        console.error(err);
+        alert(getErrorMessage(err) || `"${f.name}" 업로드에 실패했습니다.`);
+      }
+    }
+  };
+
+  /* ===================== 이벤트 핸들러 ===================== */
+
+  // 대표 이미지 선택
+  const onChangeFile: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const next: File | null =
+      e.target.files && e.target.files.length > 0 ? e.target.files[0] : null;
+    setFile(next);
+    setImageKey(null);
+    if (next) {
+      try {
+        await uploadCoverToS3(next);
+      } catch (err: unknown) {
+        console.error(err);
+        alert(getErrorMessage(err) || "이미지 업로드에 실패했습니다.");
+        setFile(null);
+        setImageKey(null);
+      }
+    }
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setImageKey(null);
+    setPreviewUrl(null);
+  };
+
   const openInlinePicker = () => inlineInputRef.current?.click();
 
   const insertAtCursor = (text: string) => {
     const ta = contentRef.current;
     if (!ta) {
-      setContent((prev) => prev + text);
+      setContent((p) => p + text);
       return;
     }
-    const start = ta.selectionStart ?? ta.value.length;
-    const end = ta.selectionEnd ?? ta.value.length;
-    const next = ta.value.slice(0, start) + text + ta.value.slice(end);
+    const s = ta.selectionStart ?? ta.value.length;
+    const e = ta.selectionEnd ?? ta.value.length;
+    const next = ta.value.slice(0, s) + text + ta.value.slice(e);
     setContent(next);
-    // 커서 재배치
     requestAnimationFrame(() => {
       ta.focus();
-      const caret = start + text.length;
+      const caret = s + text.length;
       ta.setSelectionRange(caret, caret);
     });
   };
 
-  const onPickInline: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  // 본문 이미지 선택 → 업로드 후 본문 삽입
+  const onPickInline: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const files = e.target.files;
-    if (!files) return;
-
-    const urls: string[] = [];
-    let markup = "";
-    for (const f of Array.from(files)) {
-      const url = URL.createObjectURL(f);
-      urls.push(url);
-      // 간단한 HTML 태그로 삽입 (실서비스에선 업로드 후 서버URL 삽입 권장)
-      markup += `<img src="${url}" alt="${f.name}" />\n`;
-    }
-    if (markup) {
-      insertAtCursor(markup);
-      setInlinePreviews((prev) => [...prev, ...urls]);
-    }
-    // 동일 파일 재선택 가능하도록 리셋
+    if (!files || files.length === 0) return;
+    await uploadInlineImages(files);
     e.target.value = "";
   };
 
   const removeInline = (url: string) => {
-    // 본문에서 해당 이미지 태그 제거
-    setContent((c) => c.replace(new RegExp(`<img\\s+src="${url}".*?>\\s*`, "g"), ""));
+    const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    setContent((c) =>
+      c.replace(new RegExp(`<img\\s+src="${escaped}"[^>]*>\\s*`, "g"), "")
+    );
     setInlinePreviews((prev) => prev.filter((u) => u !== url));
-    URL.revokeObjectURL(url);
   };
 
-  // ===== 제출 =====
-  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+  /* ===================== 제출 ===================== */
+
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
-    if (!canSubmit) {
-      alert("작성자, 제목, 요약, 내용을 모두 입력해주세요.");
+    if (!canSubmit || saving) {
+      if (badge.trim() === "") alert("배지는 필수 항목입니다.");
       return;
     }
 
-    // 실제에선 FormData로 전송하세요.
-    alert(
-      [
-        "등록 완료(샘플):",
-        `작성자: ${author}`,
-        `제목: ${title}`,
-        `요약: ${excerpt}`,                        // 요약 포함
-        `카테고리: ${category === "internal" ? "내부발표" : "외부발표"}`,
-        file ? `대표 이미지: ${file.name}` : "대표 이미지: (없음)",
-        `본문 이미지 개수: ${inlinePreviews.length}`,
-      ].join("\n")
-    );
+    try {
+      setSaving(true);
 
-    nav("/media", { replace: true });
+      const serverCategory: NewsCategoryData =
+        category === "internal" ? "INTERNAL" : "EXTERNAL";
+      const badgeTrimmed = badge.trim();
+
+      if (file && !imageKey && !uploading) {
+        try {
+          await uploadCoverToS3(file);
+        } catch (err: unknown) {
+          console.error(err);
+          alert(getErrorMessage(err) || "대표 이미지 업로드에 실패했습니다.");
+          setSaving(false);
+          return;
+        }
+      }
+
+      const body: NewsCreateBody = {
+        title: title.trim(),
+        excerpt: excerpt.trim(),
+        content,
+        category: serverCategory,
+        badge: badgeTrimmed, // 필수값
+        image_key: imageKey ?? null,
+      };
+
+      const res = await createNews(body);
+      alert("등록이 완료되었습니다.");
+      nav(`/media/${res.news_seq}`, { replace: true });
+    } catch (err: unknown) {
+      console.error(err);
+      alert(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onCancel = () => nav(-1);
+
+  // ── 권한 없으면 빈 화면 (훅은 위에서 항상 호출됨)
+  if (!isAuthenticated || !isManager) {
+    return null;
+  }
 
   return (
     <section className={styles.section} aria-label="게시글 등록">
@@ -144,33 +257,34 @@ export default function NewsCreatePage() {
         <h1 className={styles.title}>게시글 등록</h1>
 
         <form className={styles.form} onSubmit={onSubmit}>
-          {/* 작성자 */}
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="author">작성자</label>
+            <label className={styles.label} htmlFor="author">
+              작성자
+            </label>
             <input
               id="author"
               className={styles.input}
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              placeholder=""
             />
           </div>
 
-          {/* 제목 */}
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="title">제목</label>
+            <label className={styles.label} htmlFor="title">
+              제목
+            </label>
             <input
               id="title"
               className={styles.input}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder=""
             />
           </div>
 
-          {/* 요약 */}
           <div className={styles.rowCol}>
-            <label className={styles.label} htmlFor="excerpt">요약</label>
+            <label className={styles.label} htmlFor="excerpt">
+              요약
+            </label>
             <textarea
               id="excerpt"
               className={`${styles.textarea} ${styles.excerptBox}`}
@@ -180,9 +294,10 @@ export default function NewsCreatePage() {
             />
           </div>
 
-          {/* 내용 + 이미지 첨부 버튼/프리뷰 */}
           <div className={styles.rowCol}>
-            <label className={styles.label} htmlFor="content">내용</label>
+            <label className={styles.label} htmlFor="content">
+              내용
+            </label>
             <div>
               <div className={styles.editorBar}>
                 <button
@@ -208,7 +323,6 @@ export default function NewsCreatePage() {
                 className={styles.textarea}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder=""
               />
 
               {inlinePreviews.length > 0 && (
@@ -230,9 +344,10 @@ export default function NewsCreatePage() {
             </div>
           </div>
 
-          {/* 카테고리 (폭 축소) */}
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="category">카테고리</label>
+            <label className={styles.label} htmlFor="category">
+              카테고리
+            </label>
             <select
               id="category"
               className={styles.select}
@@ -244,17 +359,36 @@ export default function NewsCreatePage() {
             </select>
           </div>
 
-          {/* 대표 이미지 파일 */}
+          <div className={styles.row}>
+            <label className={styles.label} htmlFor="badge">
+              배지
+            </label>
+            <input
+              id="badge"
+              className={styles.input}
+              value={badge}
+              onChange={(e) => setBadge(e.target.value)}
+              placeholder="예: NEWS, UPDATE 등"
+            />
+          </div>
+
           <div className={styles.rowCol}>
-            <span className={styles.label}>이미지 파일</span>
+            <span className={styles.label}>이미지 파일(대표)</span>
             <div className={styles.fileLine}>
               <label className={styles.fileBtn}>
                 파일 선택
                 <input type="file" accept="image/*" onChange={onChangeFile} />
               </label>
-              <span className={styles.fileName}>{file ? file.name : "선택된 파일 없음"}</span>
-              {file && (
-                <button type="button" className={styles.clearBtn} onClick={clearFile}>
+              <span className={styles.fileName}>
+                {uploading ? "업로드 중..." : file ? file.name : "선택된 파일 없음"}
+              </span>
+              {(file || imageKey) && (
+                <button
+                  type="button"
+                  className={styles.clearBtn}
+                  onClick={clearFile}
+                  disabled={uploading}
+                >
                   취소
                 </button>
               )}
@@ -263,17 +397,27 @@ export default function NewsCreatePage() {
             {previewUrl && (
               <div className={styles.previewWrap}>
                 <img className={styles.preview} src={previewUrl} alt="대표 이미지 미리보기" />
+                {imageKey && <p className={styles.keyNote}>이미지 업로드 완료 ✓</p>}
               </div>
             )}
           </div>
 
-          {/* 액션 */}
           <div className={styles.actions}>
-            <button type="button" className={styles.ghost} onClick={onCancel}>
+            <button
+              type="button"
+              className={styles.ghost}
+              onClick={onCancel}
+              disabled={saving || uploading}
+            >
               취소
             </button>
-            <button type="submit" className={styles.primary} disabled={!canSubmit}>
-              등록하기
+            <button
+              type="submit"
+              className={styles.primary}
+              disabled={!canSubmit || saving || uploading}
+              title={!canSubmit ? "제목/요약/내용/배지를 모두 입력하세요." : undefined}
+            >
+              {saving ? "등록 중..." : "등록하기"}
             </button>
           </div>
         </form>
