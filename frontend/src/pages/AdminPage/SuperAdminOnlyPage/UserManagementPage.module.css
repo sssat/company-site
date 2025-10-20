@@ -7,10 +7,16 @@
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px; gap: 12px;
 }
+/* 인풋 + 버튼 묶음 */
+.searchGroup { display: flex; align-items: center; gap: 8px; }
+
 .search {
   width: 320px; max-width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb;
-  border-radius: 10px; font-size: 14px;
+  border-radius: 10px; font-size: 14px; outline: none;
 }
+/* 요청하신 포커스 스타일 */
+.searchInput:focus { border-color: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,.25); }
+
 .resultInfo { color: #6b7280; font-size: 14px; }
 
 .tableWrap { overflow: auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
@@ -18,17 +24,33 @@
 .table th, .table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; text-align: left; }
 .table thead th { background: #f8fafc; font-weight: 700; color: #374151; }
 .actions { display: flex; gap: 8px; align-items: center; }
+
+/* 기본 버튼 (승격/강등 등) */
 .btn {
   padding: 8px 10px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; color: #fff;
 }
 .promote { background: #2563eb; } /* indigo */
 .demote  { background: #ef4444; } /* red */
+
+/* 검색 버튼: 요청하신 디자인으로 변경 */
+.searchBtn {
+  padding: 8px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  height: 40px;                 /* 터치 타깃 */
+  color: #0f172a;               /* 항상 진한 글자색 보장 */
+}
+
+/* 배지/기타 */
 .badge {
   display: inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
 }
 .super { background: #e0f2ff; color: #0369a1; }
-.admin { background: #e5e7eb; color: #374151; }
-.user  { background: #ecfdf5; color: #047857; }
+.admin { background: #ecfdf5; color: #047857; }
+.user  { background: #e5e7eb; color: #374151; }
 .muted { color: #9ca3af; }
 .empty { text-align: center; color: #6b7280; padding: 28px; }
 
