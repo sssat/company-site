@@ -1,95 +1,166 @@
+// src/components/MediaOnly/NewsList.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import styles from "./NewsList.module.css";
-import { NEWS } from "./newsData";
-import type { NewsCategory } from "./newsData";
-import { useAuth } from "../../hooks/useAuth"; // 경로 확인
+import { useAuth } from "../../hooks/useAuth";
+import {
+  listNews,
+  deleteNews,
+  type NewsListItem as ApiNewsListItem,
+  type NewsListUiResponse,
+  type NewsOrder,
+  type NewsCategoryFilter,
+} from "../../api/newsApi";
+const DEFAULT_THUMB = "/src/assets/news/empty_thumbnail.jpg";
 
-type TabKey = "all" | NewsCategory;
-type NewsItem = (typeof NEWS)[number];
+/* =========================== 타입 =========================== */
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "all", label: "전체" },
-  { key: "internal", label: "내부발표" },
-  { key: "external", label: "외부발표" },
+// UI 탭 키
+type UiTabKey = "all" | "internal" | "external";
+
+// 서버 카테고리(필터 값) — "ALL" | "INTERNAL" | "EXTERNAL"
+type ServerCategory = NewsCategoryFilter;
+
+// 목록 아이템은 API 타입을 그대로 사용
+type NewsListItem = ApiNewsListItem;
+
+/* =========================== 상수/유틸 =========================== */
+
+const TABS: { key: UiTabKey; label: string; server: ServerCategory }[] = [
+  { key: "all", label: "전체", server: "ALL" },
+  { key: "internal", label: "내부발표", server: "INTERNAL" },
+  { key: "external", label: "외부발표", server: "EXTERNAL" },
 ];
 
 const PAGE_SIZE = 6;
+const DEFAULT_ORDER: NewsOrder = "recent";
+
+/** "2025-09-25T12:34:56Z" -> "2025.09.25" */
+function formatDateYmd(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}.${m}.${day}`;
+}
+
+/* =========================== 컴포넌트 =========================== */
 
 export default function NewsList() {
-  const { isAuthenticated, role } = useAuth();
+  // useAuth 반환값 구조에 맞게 사용
+  const { auth } = useAuth();
+  const isAuthenticated = auth.isAuthed;
+  const role = auth.role;
+
   const isManager = isAuthenticated && (role === "ADMIN" || role === "SUPER_ADMIN");
   const nav = useNavigate();
+  const loc = useLocation();
 
-  // 목록을 로컬 상태로 관리(삭제 시 반영)
-  const [items, setItems] = useState<NewsItem[]>(NEWS);
-
-  // URL 쿼리와 동기화 (탭/검색/페이지 유지)
+  // URL 쿼리 동기화 (탭/검색/페이지 유지)
   const [params, setParams] = useSearchParams();
-  const initTab = (params.get("tab") as TabKey) || "all";
-  const initPage = Number(params.get("page") || "1");
+  const initTab = (params.get("tab") as UiTabKey) || "all";
+  const initPage = Math.max(1, Number(params.get("page") || "1"));
   const initQuery = params.get("q") || "";
 
-  const [tab, setTab] = useState<TabKey>(initTab);
-  const [page, setPage] = useState<number>(Math.max(1, initPage));
+  const [tab, setTab] = useState<UiTabKey>(initTab);
+  const [page, setPage] = useState<number>(initPage);
 
-  // 검색 입력값과 실제 필터값을 분리
-  const [qInput, setQInput] = useState(initQuery);
-  const [query, setQuery] = useState(initQuery);
+  // 검색 입력값과 실제 필터값 분리
+  const [qInput, setQInput] = useState<string>(initQuery);
+  const [query, setQuery] = useState<string>(initQuery);
 
-  // 선택 모드(관리자 전용) + 선택된 카드 (문자열 ID로 관리)
-  const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set<string>());
+  // 서버 데이터
+  const [items, setItems] = useState<NewsListItem[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
+  // “첫 로드 완료” 플래그
+  const [ready, setReady] = useState<boolean>(false);
+
+  // 선택 모드(관리자 전용) + 선택된 카드(SEQ로 관리)
+  const [selectMode, setSelectMode] = useState<boolean>(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set<number>());
 
   // 페이드업(첫 진입 시 부드럽게 보이기)
   const sectionRef = useRef<HTMLElement>(null);
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState<boolean>(false);
   useEffect(() => {
-    const io = new IntersectionObserver(([e], o) => {
-      if (e.isIntersecting) {
-        setShow(true);
-        o.disconnect();
-      }
-    }, { threshold: 0.08 });
+    const io = new IntersectionObserver(
+      ([e], o) => {
+        if (e.isIntersecting) {
+          setShow(true);
+          o.disconnect();
+        }
+      },
+      { threshold: 0.08 }
+    );
     if (sectionRef.current) io.observe(sectionRef.current);
     return () => io.disconnect();
   }, []);
 
-  // 필터링/검색 결과 (제목 + 요약 검색)
-  const filtered = useMemo(() => {
-    const base = tab === "all" ? items : items.filter((n) => n.category === tab);
-    const q = query.trim().toLowerCase();
-    if (!q) return base;
+  // 총 페이지 수
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PAGE_SIZE)), [total]);
 
-    return base.filter((n) => {
-      const inTitle = n.title.toLowerCase().includes(q);
-      const inExcerpt = (n.excerpt ?? "").toLowerCase().includes(q);
-      return inTitle || inExcerpt;
-    });
-  }, [items, tab, query]);
+  // 데이터 로드 전에는 사용자가 고른 page를 그대로 두고,
+  // 로드 후(ready=true)에는 초과 시에만 보정
+  const clampedPage = useMemo(
+    () => (ready ? Math.min(page, totalPages) : page),
+    [ready, page, totalPages]
+  );
 
-  // 페이지네이션 계산
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const clampedPage = Math.min(page, totalPages);
-  const start = (clampedPage - 1) * PAGE_SIZE;
-  const pageItems = filtered.slice(start, start + PAGE_SIZE);
-
-  // totalPages 변화로 page가 초과하면 보정
+  // totalPages 변화로 page가 초과하면 (로드 이후에만) 보정
   useEffect(() => {
-    if (page !== clampedPage) setPage(clampedPage);
-  }, [clampedPage, page]);
+    if (ready && page !== clampedPage) setPage(clampedPage);
+  }, [ready, clampedPage, page]);
 
-  // URL 쿼리 동기화
+  // URL 쿼리 동기화 (로드 전에는 사용자가 가진 page를, 로드 후에는 보정된 page를 사용)
   useEffect(() => {
+    const pageForUrl = ready ? clampedPage : page;
     const next = new URLSearchParams();
     if (tab !== "all") next.set("tab", tab);
-    if (clampedPage !== 1) next.set("page", String(clampedPage));
+    if (pageForUrl !== 1) next.set("page", String(pageForUrl));
     if (query.trim()) next.set("q", query.trim());
     setParams(next, { replace: true });
-  }, [tab, clampedPage, query, setParams]);
+  }, [tab, query, page, clampedPage, ready, setParams]);
+
+  // 목록 로드
+  useEffect(() => {
+    let aborted = false;
+    async function run() {
+      setLoading(true);
+      setErrorMsg("");
+      try {
+        const serverCategory = TABS.find((t) => t.key === tab)?.server ?? "ALL";
+        const res: NewsListUiResponse = await listNews({
+          page: clampedPage,
+          size: PAGE_SIZE,
+          q: query.trim() || undefined,
+          category: serverCategory,
+          order: DEFAULT_ORDER, // "recent" | "oldest"
+        });
+
+        if (aborted) return;
+        setItems(res.items);
+        setTotal(res.total);
+        setSelected(new Set<number>()); // 페이지 이동/필터 변경 시 선택 초기화
+        setReady(true);                  // 첫 로드 완료
+      } catch {
+        if (aborted) return;
+        setErrorMsg("목록을 불러오는 중 오류가 발생했습니다.");
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    }
+    run();
+    return () => {
+      aborted = true;
+    };
+  }, [tab, clampedPage, query]);
 
   // 탭 변경 시 첫 페이지로
-  const handleTab = (t: TabKey) => {
+  const handleTab = (t: UiTabKey) => {
     setTab(t);
     setPage(1);
   };
@@ -108,16 +179,16 @@ export default function NewsList() {
 
   // 선택/체크박스 핸들러
   const toggleSelectMode = () => {
-    if (!selectMode) setSelected(new Set<string>()); // 켜질 때 선택 초기화
+    if (!selectMode) setSelected(new Set<number>()); // 켜질 때 선택 초기화
     setSelectMode((v) => !v);
   };
-  const clearSelection = () => setSelected(new Set<string>());
+  const clearSelection = () => setSelected(new Set<number>());
 
-  const toggleChecked = (id: string) => {
+  const toggleChecked = (seq: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(seq)) next.delete(seq);
+      else next.add(seq);
       return next;
     });
   };
@@ -128,21 +199,43 @@ export default function NewsList() {
       alert("수정은 하나만 선택하세요.");
       return;
     }
-    const id = Array.from(selected)[0];
-    const item = items.find((n) => n.id === id);
+    const seq = Array.from(selected)[0];
+    const item = items.find((n) => n.news_seq === seq);
     if (!item) return;
-    nav(`/media/${item.slug}/edit`);
+    nav(`/media/${item.news_seq}/edit`);
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (selected.size === 0) {
       alert("삭제할 항목을 선택하세요.");
       return;
     }
     if (!confirm(`${selected.size}개 항목을 삭제할까요?`)) return;
-    setItems((prev) => prev.filter((n) => !selected.has(n.id)));
-    clearSelection();
-    setSelectMode(false);
+
+    try {
+      const seqs = Array.from(selected);
+      await Promise.all(seqs.map((seq) => deleteNews(seq)));
+      setItems((prev) => prev.filter((n) => !selected.has(n.news_seq)));
+      setTotal((prev) => Math.max(0, prev - seqs.length));
+      clearSelection();
+      setSelectMode(false);
+      if (items.length - seqs.length <= 0 && clampedPage > 1) {
+        setPage(clampedPage - 1);
+      } else {
+        const serverCategory = TABS.find((t) => t.key === tab)?.server ?? "ALL";
+        const res: NewsListUiResponse = await listNews({
+          page: clampedPage,
+          size: PAGE_SIZE,
+          q: query.trim() || undefined,
+          category: serverCategory,
+          order: DEFAULT_ORDER,
+        });
+        setItems(res.items);
+        setTotal(res.total);
+      }
+    } catch {
+      alert("삭제 중 오류가 발생했습니다.");
+    }
   };
 
   return (
@@ -195,22 +288,38 @@ export default function NewsList() {
           )}
         </div>
 
+        {/* 상태 표시 */}
+        {loading && <div className={styles.loading}>불러오는 중…</div>}
+        {!!errorMsg && <div className={styles.error}>{errorMsg}</div>}
+        {!loading && items.length === 0 && !errorMsg && (
+          <div className={styles.empty}>표시할 뉴스가 없습니다.</div>
+        )}
+
         {/* 카드 그리드 */}
         <div className={`${styles.grid} ${selectMode ? styles.selectMode : ""}`}>
-          {pageItems.map((n) => {
-            const checked = selected.has(n.id);
+          {items.map((n) => {
+            const checked = selected.has(n.news_seq);
+            const img = n.thumbnail_url ?? n.image_url ?? DEFAULT_THUMB;
+            const dateYmd = formatDateYmd(n.published_at);
             return (
-              <article key={n.id} className={`${styles.card} ${checked ? styles.checked : ""}`}>
+              <article key={n.news_seq} className={`${styles.card} ${checked ? styles.checked : ""}`}>
                 {/* 선택 모드에선 링크 이동을 막음 */}
                 <Link
-                  to={`/media/${n.slug}`}
+                  to={{ pathname: `/media/${n.news_seq}`, search: loc.search }}
                   className={styles.thumb}
                   onClick={(e) => {
-                    if (selectMode) { e.preventDefault(); return; }
+                    if (selectMode) {
+                      e.preventDefault();
+                      return;
+                    }
                     goTopOnNav();
                   }}
                 >
-                  <img src={n.image} alt={`${n.title} 썸네일`} />
+                  {img ? (
+                    <img src={img} alt={`${n.title} 썸네일`} />
+                  ) : (
+                    <div className={styles.noThumb} aria-label="썸네일 없음" />
+                  )}
                 </Link>
 
                 {/* 선택 모드에서만 체크박스 노출 */}
@@ -220,23 +329,26 @@ export default function NewsList() {
                       type="checkbox"
                       className={styles.checkbox}
                       checked={checked}
-                      onChange={() => toggleChecked(n.id)}
+                      onChange={() => toggleChecked(n.news_seq)}
                     />
                   </label>
                 )}
 
                 <div className={styles.meta}>
                   <span className={styles.badge}>{n.badge ?? "NEWS"}</span>
-                  <time className={styles.date} dateTime={n.date.replace(/\./g, "-")}>
-                    {n.date}
+                  <time className={styles.date} dateTime={n.published_at}>
+                    {dateYmd}
                   </time>
                 </div>
 
                 <h2 className={styles.cardTitle}>
                   <Link
-                    to={`/media/${n.slug}`}
+                    to={{ pathname: `/media/${n.news_seq}`, search: loc.search }}
                     onClick={(e) => {
-                      if (selectMode) { e.preventDefault(); return; }
+                      if (selectMode) {
+                        e.preventDefault();
+                        return;
+                      }
                       goTopOnNav();
                     }}
                   >
@@ -244,7 +356,7 @@ export default function NewsList() {
                   </Link>
                 </h2>
 
-                <p className={styles.excerpt}>{n.excerpt}</p>
+                {n.excerpt && <p className={styles.excerpt}>{n.excerpt}</p>}
               </article>
             );
           })}
@@ -292,7 +404,9 @@ export default function NewsList() {
             onChange={(e) => setQInput(e.target.value)}
             aria-label="뉴스 검색 (제목/요약)"
           />
-          <button className={styles.searchBtn} type="submit">검색</button>
+          <button className={styles.searchBtn} type="submit">
+            검색
+          </button>
         </form>
 
         {/* 페이지네이션 */}
