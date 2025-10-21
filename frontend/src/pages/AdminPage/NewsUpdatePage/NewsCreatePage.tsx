@@ -6,7 +6,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import {
   createNews,
   type NewsCreateBody,
-  type NewsCategoryData, // 데이터 타입만 사용
+  type NewsCategoryData,
   getNewsUploadUrl,
   uploadToS3Put,
 } from "../../../api/newsApi";
@@ -19,41 +19,46 @@ function getErrorMessage(e: unknown): string {
   return "오류가 발생했습니다.";
 }
 
+function basenameFromUrl(u: string): string {
+  try {
+    const p = new URL(u).pathname;
+    const name = p.split("/").pop() ?? "";
+    return decodeURIComponent(name.split("?")[0]);
+  } catch {
+    return "";
+  }
+}
+
 export default function NewsCreatePage() {
   const nav = useNavigate();
 
-  // ── 권한
   const { auth } = useAuth();
   const isAuthenticated = auth.isAuthed;
   const role = auth.role;
   const isManager = isAuthenticated && (role === "ADMIN" || role === "SUPER_ADMIN");
 
-  // ── (중복 alert 방지용) 경고 여부
   const warnedRef = useRef(false);
 
-  // ── 폼 상태
   const [author, setAuthor] = useState<string>("");
   const [title, setTitle] = useState<string>("");
   const [excerpt, setExcerpt] = useState<string>("");
   const [content, setContent] = useState<string>("");
   const [category, setCategory] = useState<Category>("internal");
-  const [badge, setBadge] = useState<string>(""); // 필수: 비어있으면 제출 불가
+  const [badge, setBadge] = useState<string>("");
 
-  // ── 대표 이미지 업로드(썸네일)
+  // 썸네일
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageKey, setImageKey] = useState<string | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
 
-  // ── 본문 이미지
+  // 본문 이미지(1개 제한)
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
-  const [inlinePreviews, setInlinePreviews] = useState<string[]>([]); // public_url 목록
+  const [inlinePreviews, setInlinePreviews] = useState<string[]>([]);
 
-  // ── 제출 로딩
   const [saving, setSaving] = useState<boolean>(false);
 
-  // ── 접근 가드: 빈 화면 + alert 후 리다이렉트 (StrictMode 중복 방지)
   useEffect(() => {
     if (warnedRef.current) return;
     if (!isAuthenticated) {
@@ -69,7 +74,6 @@ export default function NewsCreatePage() {
     }
   }, [isAuthenticated, isManager, nav]);
 
-  // ── 로컬 선택 시 임시 미리보기(대표 이미지 전용)
   useEffect(() => {
     if (!file) {
       setPreviewUrl(null);
@@ -80,7 +84,6 @@ export default function NewsCreatePage() {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // ── 배지 포함 필수값 체크
   const canSubmit = useMemo<boolean>(() => {
     return (
       title.trim() !== "" &&
@@ -90,13 +93,9 @@ export default function NewsCreatePage() {
     );
   }, [title, excerpt, content, badge]);
 
-  /* ===================== 업로드 유틸 ===================== */
-
-  /** 대표 이미지(썸네일) 업로드: 항상 kind=thumbnail */
   const uploadCoverToS3 = async (f: File) => {
     const max = 10 * 1024 * 1024;
     if (f.size > max) throw new Error("이미지 용량은 10MB 이하만 업로드할 수 있습니다.");
-
     setUploading(true);
     try {
       const { upload_url, key, public_url, content_type } = await getNewsUploadUrl(
@@ -112,33 +111,27 @@ export default function NewsCreatePage() {
     }
   };
 
-  /** 본문 이미지 업로드: 항상 kind=content, 업로드 후 본문에 <img src="public_url"> 삽입 */
-  const uploadInlineImages = async (files: FileList) => {
-    for (const f of Array.from(files)) {
-      const max = 10 * 1024 * 1024;
-      if (f.size > max) {
-        alert(`"${f.name}"은(는) 10MB를 초과합니다.`);
-        continue;
-      }
-      try {
-        const { upload_url, public_url, content_type } = await getNewsUploadUrl(
-          f.name,
-          f.type || "application/octet-stream",
-          "content"
-        );
-        await uploadToS3Put(upload_url, f, content_type);
-        insertAtCursor(`<img src="${public_url}" alt="${f.name}" />\n`);
-        setInlinePreviews((prev) => [...prev, public_url]);
-      } catch (err) {
-        console.error(err);
-        alert(getErrorMessage(err) || `"${f.name}" 업로드에 실패했습니다.`);
-      }
+  const uploadOneInlineImage = async (f: File): Promise<string | null> => {
+    const max = 10 * 1024 * 1024;
+    if (f.size > max) {
+      alert(`"${f.name}"은(는) 10MB를 초과합니다.`);
+      return null;
+    }
+    try {
+      const { upload_url, public_url, content_type } = await getNewsUploadUrl(
+        f.name,
+        f.type || "application/octet-stream",
+        "content"
+      );
+      await uploadToS3Put(upload_url, f, content_type);
+      return public_url ?? null;
+    } catch (err) {
+      console.error(err);
+      alert(getErrorMessage(err) || `"${f.name}" 업로드에 실패했습니다.`);
+      return null;
     }
   };
 
-  /* ===================== 이벤트 핸들러 ===================== */
-
-  // 대표 이미지 선택
   const onChangeFile: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const next: File | null =
       e.target.files && e.target.files.length > 0 ? e.target.files[0] : null;
@@ -164,40 +157,27 @@ export default function NewsCreatePage() {
 
   const openInlinePicker = () => inlineInputRef.current?.click();
 
-  const insertAtCursor = (text: string) => {
-    const ta = contentRef.current;
-    if (!ta) {
-      setContent((p) => p + text);
-      return;
-    }
-    const s = ta.selectionStart ?? ta.value.length;
-    const e = ta.selectionEnd ?? ta.value.length;
-    const next = ta.value.slice(0, s) + text + ta.value.slice(e);
-    setContent(next);
-    requestAnimationFrame(() => {
-      ta.focus();
-      const caret = s + text.length;
-      ta.setSelectionRange(caret, caret);
-    });
-  };
-
-  // 본문 이미지 선택 → 업로드 후 본문 삽입
   const onPickInline: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    await uploadInlineImages(files);
+
+    if (inlinePreviews.length >= 1) {
+      alert("본문 이미지는 1개만 업로드할 수 있습니다. 기존 이미지를 제거한 후 다시 시도하세요.");
+      e.target.value = "";
+      return;
+    }
+
+    const first = files[0];
+    const publicUrl = await uploadOneInlineImage(first);
+    if (publicUrl) {
+      setInlinePreviews([publicUrl]);
+    }
     e.target.value = "";
   };
 
   const removeInline = (url: string) => {
-    const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    setContent((c) =>
-      c.replace(new RegExp(`<img\\s+src="${escaped}"[^>]*>\\s*`, "g"), "")
-    );
     setInlinePreviews((prev) => prev.filter((u) => u !== url));
   };
-
-  /* ===================== 제출 ===================== */
 
   const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
@@ -211,7 +191,6 @@ export default function NewsCreatePage() {
 
       const serverCategory: NewsCategoryData =
         category === "internal" ? "INTERNAL" : "EXTERNAL";
-      const badgeTrimmed = badge.trim();
 
       if (file && !imageKey && !uploading) {
         try {
@@ -224,12 +203,18 @@ export default function NewsCreatePage() {
         }
       }
 
+      const imagesHtmlTop = inlinePreviews
+        .map((u) => `<img src="${u}" alt="${basenameFromUrl(u)}" />`)
+        .join("\n");
+      const finalContent =
+        imagesHtmlTop.trim().length > 0 ? `${imagesHtmlTop}\n\n${content}` : content;
+
       const body: NewsCreateBody = {
         title: title.trim(),
         excerpt: excerpt.trim(),
-        content,
+        content: finalContent,
         category: serverCategory,
-        badge: badgeTrimmed, // 필수값
+        badge: badge.trim(),
         image_key: imageKey ?? null,
       };
 
@@ -246,10 +231,7 @@ export default function NewsCreatePage() {
 
   const onCancel = () => nav(-1);
 
-  // ── 권한 없으면 빈 화면 (훅은 위에서 항상 호출됨)
-  if (!isAuthenticated || !isManager) {
-    return null;
-  }
+  if (!isAuthenticated || !isManager) return null;
 
   return (
     <section className={styles.section} aria-label="게시글 등록">
@@ -258,33 +240,17 @@ export default function NewsCreatePage() {
 
         <form className={styles.form} onSubmit={onSubmit}>
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="author">
-              작성자
-            </label>
-            <input
-              id="author"
-              className={styles.input}
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-            />
+            <label className={styles.label} htmlFor="author">작성자</label>
+            <input id="author" className={styles.input} value={author} onChange={(e) => setAuthor(e.target.value)} />
           </div>
 
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="title">
-              제목
-            </label>
-            <input
-              id="title"
-              className={styles.input}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+            <label className={styles.label} htmlFor="title">제목</label>
+            <input id="title" className={styles.input} value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
 
           <div className={styles.rowCol}>
-            <label className={styles.label} htmlFor="excerpt">
-              요약
-            </label>
+            <label className={styles.label} htmlFor="excerpt">요약</label>
             <textarea
               id="excerpt"
               className={`${styles.textarea} ${styles.excerptBox}`}
@@ -295,23 +261,17 @@ export default function NewsCreatePage() {
           </div>
 
           <div className={styles.rowCol}>
-            <label className={styles.label} htmlFor="content">
-              내용
-            </label>
+            <label className={styles.label} htmlFor="content">내용</label>
             <div>
               <div className={styles.editorBar}>
-                <button
-                  type="button"
-                  className={styles.smallBtn}
-                  onClick={openInlinePicker}
-                >
+                <button type="button" className={styles.smallBtn} onClick={openInlinePicker}>
                   이미지 첨부
                 </button>
+                {/* ▼ 기본 파일 입력을 숨겨 중복 버튼(파일 선택) 제거 */}
                 <input
                   ref={inlineInputRef}
                   type="file"
                   accept="image/*"
-                  multiple
                   hidden
                   onChange={onPickInline}
                 />
@@ -330,11 +290,7 @@ export default function NewsCreatePage() {
                   {inlinePreviews.map((u) => (
                     <div key={u} className={styles.inlineThumb}>
                       <img src={u} alt="본문 이미지 미리보기" />
-                      <button
-                        type="button"
-                        className={styles.inlineRemove}
-                        onClick={() => removeInline(u)}
-                      >
+                      <button type="button" className={styles.inlineRemove} onClick={() => removeInline(u)}>
                         제거
                       </button>
                     </div>
@@ -345,9 +301,7 @@ export default function NewsCreatePage() {
           </div>
 
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="category">
-              카테고리
-            </label>
+            <label className={styles.label} htmlFor="category">카테고리</label>
             <select
               id="category"
               className={styles.select}
@@ -360,9 +314,7 @@ export default function NewsCreatePage() {
           </div>
 
           <div className={styles.row}>
-            <label className={styles.label} htmlFor="badge">
-              배지
-            </label>
+            <label className={styles.label} htmlFor="badge">배지</label>
             <input
               id="badge"
               className={styles.input}
@@ -373,7 +325,7 @@ export default function NewsCreatePage() {
           </div>
 
           <div className={styles.rowCol}>
-            <span className={styles.label}>이미지 파일(대표)</span>
+            <span className={styles.label}>썸네일</span>
             <div className={styles.fileLine}>
               <label className={styles.fileBtn}>
                 파일 선택
@@ -383,12 +335,7 @@ export default function NewsCreatePage() {
                 {uploading ? "업로드 중..." : file ? file.name : "선택된 파일 없음"}
               </span>
               {(file || imageKey) && (
-                <button
-                  type="button"
-                  className={styles.clearBtn}
-                  onClick={clearFile}
-                  disabled={uploading}
-                >
+                <button type="button" className={styles.clearBtn} onClick={clearFile} disabled={uploading}>
                   취소
                 </button>
               )}
@@ -403,12 +350,7 @@ export default function NewsCreatePage() {
           </div>
 
           <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.ghost}
-              onClick={onCancel}
-              disabled={saving || uploading}
-            >
+            <button type="button" className={styles.ghost} onClick={onCancel} disabled={saving || uploading}>
               취소
             </button>
             <button
