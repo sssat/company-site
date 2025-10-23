@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    # 방법 A: 절대경로 직접 지정
+    # url: jdbc:sqlite:C:/Projects/company-site/backend-django/db.sqlite3
+
+    # 방법 B: 환경변수(DB_PATH)로 주입
+    url: jdbc:sqlite:${DB_PATH}
+    driver-class-name: org.sqlite.JDBC
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.community.dialect.SQLiteDialect
+        globally_quoted_identifiers: true
+
+  flyway:
+    # 처음엔 꺼두고(선택) 서버만 확인
+    enabled: false

@@ -1,9 +1,8 @@
 HELP.md
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+!/backend-spring/gradle/wrapper/gradle-wrapper.jar
+!/backend-spring/gradle/wrapper/gradle-wrapper.properties
 
 ### STS ###
 .apt_generated
@@ -35,3 +34,10 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# backend-spring 전용
+/backend-spring/build/
+/backend-spring/.gradle/
+/backend-spring/out/
+/backend-spring/.idea/
+/backend-spring/*.iml
