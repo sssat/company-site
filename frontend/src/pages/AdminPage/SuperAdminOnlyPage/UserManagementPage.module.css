@@ -5,7 +5,7 @@
 
 .toolbar {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px; gap: 12px;
+  margin-bottom: 12px; gap: 12px; flex-wrap: nowrap;
 }
 /* 인풋 + 버튼 묶음 */
 .searchGroup { display: flex; align-items: center; gap: 8px; }
@@ -14,25 +14,44 @@
   width: 320px; max-width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb;
   border-radius: 10px; font-size: 14px; outline: none;
 }
-/* 요청하신 포커스 스타일 */
-.searchInput:focus { border-color: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,.25); }
+/* 포커스 스타일 */
+.search:focus { border-color: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,.25); }
+.search:focus-visible { border-color: #3ba1ff; box-shadow: 0 0 0 3px rgba(59,161,255,.35); }
 
 .resultInfo { color: #6b7280; font-size: 14px; }
 
-.tableWrap { overflow: auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
-.table { width: 100%; border-collapse: collapse; }
-.table th, .table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; text-align: left; }
+/* ───────── 테이블 (가로 스크롤 제거) ───────── */
+.tableWrap {
+  /* 좌우 스크롤 제거 */
+  overflow-x: hidden; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.06);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  /* 셀 너비 균등 분배 + 자동 줄바꿈 */
+  table-layout: fixed;
+}
+.table th, .table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  /* 긴 텍스트 줄바꿈 */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
 .table thead th { background: #f8fafc; font-weight: 700; color: #374151; }
-.actions { display: flex; gap: 8px; align-items: center; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
 
 /* 기본 버튼 (승격/강등 등) */
 .btn {
   padding: 8px 10px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; color: #fff;
 }
+.btn:focus-visible { outline: 3px solid rgba(59,161,255,.45); outline-offset: 2px; }
 .promote { background: #2563eb; } /* indigo */
 .demote  { background: #ef4444; } /* red */
 
-/* 검색 버튼: 요청하신 디자인으로 변경 */
+/* 검색 버튼 */
 .searchBtn {
   padding: 8px 14px;
   border: 1px solid #e5e7eb;
@@ -40,9 +59,11 @@
   background: #fff;
   font-weight: 700;
   cursor: pointer;
-  height: 40px;                 /* 터치 타깃 */
-  color: #0f172a;               /* 항상 진한 글자색 보장 */
+  height: 40px;
+  color: #0f172a;
 }
+.searchBtn:hover { background: #f3f4f6; }
+.searchBtn:focus-visible { outline: 3px solid rgba(59,161,255,.45); outline-offset: 2px; }
 
 /* 배지/기타 */
 .badge {
@@ -69,8 +90,52 @@
 .pagerBtn:disabled {
   opacity: .5; cursor: default; background: #fafafa; color: #9ca3af;
 }
+.pagerBtn:focus-visible { outline: 3px solid rgba(59,161,255,.45); outline-offset: 2px; }
 .square { padding: 0; }              /* <<, <, >, >> */
 .num { }                              /* 숫자 버튼 */
 .active {
   background: #3ba1ff; color: #fff; border-color: #3ba1ff;
+}
+
+/* ───────────────── 반응형 (스크롤 없이 꽉 차게) ───────────────── */
+/* 태블릿 이하 */
+@media (max-width: 900px) {
+  .title { font-size: 22px; }
+  .section { padding: 20px 14px; }
+  .toolbar { flex-wrap: wrap; gap: 10px; }
+  .searchGroup { flex: 1 1 100%; }
+  .search { width: 100%; }
+  .searchBtn { width: 100%; }
+  .resultInfo { width: 100%; font-size: 13px; }
+
+  /* 셀 간격/폰트 압축 */
+  .table th, .table td { padding: 10px 10px; }
+}
+
+/* 모바일 */
+@media (max-width: 640px) {
+  .title { font-size: 20px; margin-bottom: 12px; }
+  .section { padding: 16px 12px; }
+  .toolbar { gap: 8px; }
+  .searchGroup { gap: 6px; }
+  .badge { font-size: 11px; padding: 5px 8px; }
+
+  /* 테이블을 촘촘하게 */
+  .table { table-layout: fixed; }
+  .table th, .table td { padding: 8px 8px; font-size: 13px; line-height: 1.35; }
+  .table thead th { font-size: 13px; }
+
+  /* 액션 버튼 줄바꿈 허용 + 컴팩트 */
+  .actions { gap: 6px; flex-wrap: wrap; }
+  .btn { padding: 7px 9px; font-size: 12px; border-radius: 9px; }
+  .pager { flex-wrap: wrap; gap: 6px; }
+  .pagerBtn { min-width: 34px; height: 34px; padding: 0 8px; font-size: 13px; }
+}
+
+/* 아주 작은 모바일 */
+@media (max-width: 400px) {
+  .title { font-size: 19px; }
+  .searchBtn { height: 38px; }
+  .table th, .table td { padding: 7px 6px; font-size: 12.5px; }
+  .pagerBtn { min-width: 32px; height: 32px; font-size: 12px; }
 }

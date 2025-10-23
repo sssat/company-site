@@ -1,3 +1,5 @@
+# 맨 처음 회원 등급 시드 데이터를 삽입하기 위한 코드
+
 from django.core.management.base import BaseCommand
 from accounts.models import UserLevel
 

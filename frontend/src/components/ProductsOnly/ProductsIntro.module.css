@@ -1,15 +1,22 @@
+/* src/components/ProductsOnly/ProductsIntro.module.css */
+
 /* 페이지 기본 */
 .page {
-  min-height: 70vh;
-  background: #ffffff;
-  color: #111827;
+  /* 모바일/좁은 화면 과도 여백 방지 */
+  min-height: auto;
+}
+/* 넓은 데스크톱에서만 살짝 높이 확보(선택) */
+@media (min-width: 1280px) {
+  .page { min-height: 58vh; }
 }
 
 /* 인트로 영역: 가운데 정렬 + 페이드업 */
 .intro {
   max-width: 1100px;
-  margin: 120px auto 80px;
-  padding: 0 20px;
+  /* 상/하 여백을 화면 크기에 맞춰 자동 조절 */
+  margin: clamp(48px, 12vh, 120px) auto clamp(20px, 8vh, 80px);
+  /* 좌우 패딩도 유동 */
+  padding-inline: clamp(12px, 4vw, 20px);
 
   /* 초기 상태(숨김) */
   opacity: 0;
@@ -24,31 +31,31 @@
 .title {
   font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif;
   font-weight: 900;
-  font-size: 36px;
-  line-height: 1.35;
+  font-size: clamp(24px, 5.8vw, 50px);
+  line-height: 1.28;
   text-align: center;
   letter-spacing: -0.3px;
-  margin: 0 0 24px;
+  margin: 0 0 clamp(14px, 3.4vw, 24px);
+  word-break: keep-all;       /* 한글 단어 분리 방지 */
+  overflow-wrap: anywhere;    /* 긴 영문 단어 대비 */
 }
 
 /* 서브 카피 */
 .subtitle {
   font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif;
   font-weight: 500;
-  font-size: 14px;
+  font-size: clamp(13px, 2.4vw, 16px);
   line-height: 1.8;
   color: #4b5563;
   text-align: center;
   margin: 0;
+  max-width: 72ch;            /* 가독성 위한 줄 길이 제한 */
+  margin-inline: auto;
 }
 
-/* 반응형 */
-@media (min-width: 768px) {
-  .title { font-size: 44px; }
-  .subtitle { font-size: 15px; }
-}
+/* (기존 1024px 미디어쿼리는 clamp로 대체되어 불필요) */
 
-@media (min-width: 1024px) {
-  .title { font-size: 50px; }
-  .subtitle { font-size: 16px; }
+@media (min-width: 1280px) {
+  /* 58vh가 커지지 않도록 480px 상한 */
+  .page { min-height: clamp(0px, 58vh, 480px); }
 }

@@ -1,5 +1,6 @@
+# SimpleJWT 기본은 user_id 기반인데, 우리 모델은 PK가 user_seq이므로 식별 방식을 맞춰야 함 -> 그걸 위한 코드
+
 from django.conf import settings
-from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
 

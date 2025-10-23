@@ -1,6 +1,7 @@
+/* src/components/TeamOnly/People.module.css */
 /* 페이지 기본 */
 .page {
-  min-height: 140vh;
+  min-height: auto;
   background: #ffffff;
   color: #111827;
 }
@@ -8,17 +9,18 @@
 /* 인트로: 좌(제목) / 중간(문구) / 우(여백) */
 .intro {
   max-width: 1100px;
-  margin: 100px auto 40px;
-  padding: 0 20px;
+  margin: clamp(56px, 12vh, 100px) auto clamp(24px, 8vh, 40px);
+  padding: 0 clamp(12px, 4vw, 20px);
 
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;  /* ← 가운데 컬럼에 문구 배치 */
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); /* 가운데 컬럼에 문구 */
+  gap: clamp(12px, 2.4vw, 24px);
 
   align-items: start;
   opacity: 0;
   transform: translateY(56px);
   transition: opacity 0.9s ease-out, transform 0.9s ease-out;
+  overflow-x: clip; /* 서브픽셀 가로 스크롤 방지 */
 }
 
 /* 제목: 왼쪽 컬럼 고정 */
@@ -26,20 +28,25 @@
   grid-column: 1 / 2;
   font-family: "Poppins", "Noto Sans KR", sans-serif;
   font-weight: 900;
-  font-size: 48px;
+  font-size: clamp(28px, 5.4vw, 48px);
+  line-height: 1.15;
   margin: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* 문구: 가운데 컬럼 + 가운데 정렬 */
 .kicker {
-  grid-column: 2 / 3;        /* ← 중앙 컬럼 */
-  justify-self: center;      /* 컬럼 안에서 수평 중앙 */
-  text-align: center;        /* 텍스트 중앙 정렬 */
-  margin: 100px 0 0 0;        /* 제목보다 살짝 아래 */
+  grid-column: 2 / 3;               /* 중앙 컬럼 */
+  justify-self: center;             /* 컬럼 안에서 수평 중앙 */
+  align-self: center;               /* 행 높이 내에서 수직 중앙(제목 기준 살짝 아래 느낌) */
+  text-align: center;
+  margin-top: clamp(32px, 8vh, 80px);
   font-family: "Noto Sans KR", sans-serif;
   font-weight: 800;
-  font-size: 22px;
+  font-size: clamp(16px, 2.2vw, 22px);
   line-height: 1.5;
+  max-width: 38ch;                  /* 가독성 줄 길이 제한 */
 }
 
 /* 페이드업 공통 */
@@ -49,12 +56,12 @@
 /* 팀 카드 그리드 */
 .grid {
   max-width: 1100px;
-  margin: 40px auto 120px;
-  padding: 0 20px;
+  margin: clamp(24px, 6vh, 40px) auto clamp(72px, 12vh, 120px);
+  padding: 0 clamp(12px, 4vw, 20px);
 
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 32px;
+  gap: clamp(16px, 3vw, 32px);
 }
 
 /* 개별 카드 */
@@ -81,6 +88,8 @@
   height: auto;
   display: block;
   object-fit: cover;
+  /* 필요 시 균일 높이를 원하면:
+     aspect-ratio: 4 / 3; */
 }
 
 /* 설명 + 배지 */
@@ -106,16 +115,29 @@
 /* 카드가 보일 때 */
 .card.show { opacity: 1; transform: translateY(0); }
 
-/* 반응형 */
+/* ───────── 반응형 ───────── */
+
+/* 태블릿: 3열 → 2열로 전환, 인트로는 2열로 압축 */
 @media (max-width: 1024px) {
-  .kicker { margin-top: 10px; }
+  .intro {
+    grid-template-columns: 1fr 1fr; /* 좌: 제목 / 우: 문구 */
+  }
+  .h1 { grid-column: 1 / 2; text-align: left; }
+  .kicker { grid-column: 2 / 3; align-self: start; } /* 과한 간격 방지 */
 }
+
+/* 모바일: 한 줄 스택 */
 @media (max-width: 768px) {
   .intro {
-    grid-template-columns: 1fr; /* 모바일은 한 줄 */
+    grid-template-columns: 1fr;
     text-align: center;
     gap: 12px;
   }
-  .h1 { font-size: 36px; grid-column: auto; }
-  .kicker { font-size: 18px; margin-top: 6px; grid-column: auto; }
+  .h1 { font-size: clamp(24px, 7vw, 36px); grid-column: auto; text-align: center; }
+  .kicker { font-size: clamp(15px, 4.6vw, 18px); margin-top: 6px; grid-column: auto; }
+}
+
+/* 모션 저감 선호 */
+@media (prefers-reduced-motion: reduce) {
+  .intro, .card { transition: none; transform: none; }
 }

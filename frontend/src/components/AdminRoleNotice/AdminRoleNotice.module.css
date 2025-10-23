@@ -1,10 +1,13 @@
-/* src/components/AdminRoleNotice/AdminRoleNotice.module.css */
 .bar {
   padding: 6px 12px;
   text-align: center;
-  color: #ef4444;        /* 빨간색 글자 (스크린샷 스타일) */
+  color: #ef4444; /* 기본 문구 색상 (빨간색) */
   font-weight: 700;
   font-size: 24px;
   background: transparent;
 }
 
+/* 이름만 다른 색상으로 강조 */
+.name {
+  color: #0536fb; /* 파랑 (원하면 다른 색으로 변경 가능) */
+}

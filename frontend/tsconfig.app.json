@@ -1,3 +1,5 @@
+// frontend/tsconfig.app.json
+// TypeScript 컴파일러에게 "프론트엔드(React) 코드를 어떤 규칙으로 해석/검사할지" 알려주는 설정 파일
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",

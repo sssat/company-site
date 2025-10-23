@@ -1,3 +1,5 @@
+# 맨 처음 슈퍼어드민 계정을 생성하기 위한 시드 데이터 코드
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth.hashers import make_password
 from datetime import date

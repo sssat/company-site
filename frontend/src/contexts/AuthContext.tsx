@@ -1,3 +1,5 @@
+// src/contexts/AuthContext.tsx
+
 // 1. React에선 컴포넌트 안에 또 다른 컴포넌트를 넣을 수 있다. 
 // 이때, 바깥쪽에서 감싸는 컴포넌트가 부모이고 그 안에 포함된 컴포넌트가 자식이다.
 // 그리고 React에선 부모 컴포넌트 -> 자식 컴포넌트로 값을 넘길때 props를 사용한다.
@@ -38,26 +40,33 @@
 // 6. 참고로 컨텍스트는 기능별로 여러개를 만들 수 있다.
 // AuthContext.tsx는 인증/권한 관련 기능을 정의한 컨텍스트 이다.
 
+import { createContext, useContext } from "react";
+import type { Role } from "../api/accountsApi";
 
-// React의 컨텍스트 객체를 만들기 위한 함수
-import { createContext } from "react";
-
-// 권한을 리터럴 유니온 타입으로 고정 -> 오타 방지, 자동완성, allowed: Role[] 같은 곳에서 타입 안전
-export type Role = "USER" | "ADMIN" | "SUPER_ADMIN";
-
-// 여기선 얘네들이 컨텍스트 값(context value) 구성요소이다. 실제 context value은 AuthProvider.tsx에서 생성한다.
-// isAuthenticated: boolean → 로그인 여부
-// role: Role → 현재 사용자 권한
-// userName: string | null → 사용자 이름(없을 수 있음)
-// login(username: string, password?: string) → 로그인 함수 (데모라 password 옵션)
-// logout() → 로그아웃 함수
-export type AuthContextType = {
-  isAuthenticated: boolean;
-  role: Role;
+export type Auth = {
+  isAuthed: boolean;
+  role: Role | null;
+  userSeq: number | null;
+  userId: string | null;
   userName: string | null;
-  login: (username: string, password?: string) => void; 
-  logout: () => void;
 };
 
-// 실제 컨텍스트 객체 생성
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+type AuthContextValue = {
+  auth: Auth;
+  login: (id: string, pw: string) => Promise<void>;
+  logout: () => Promise<void>;
+};
+
+// 안전한 기본값 (동작은 하지 않지만 타입 보장)
+export const Ctx = createContext<AuthContextValue>({
+  auth: { isAuthed: false, role: null, userSeq: null, userId: null, userName: null },
+  login: async () => {},
+  logout: async () => {},
+});
+
+// 편의 훅
+export function useAuth() {
+  return useContext(Ctx);
+}
+
+

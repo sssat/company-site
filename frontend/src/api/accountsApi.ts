@@ -17,7 +17,7 @@
 // - POST /api/auth/find-password/        -> 비밀번호 찾기 (이름+아이디+이메일 모두 일치 시 임시 비밀번호 발급)
 
 // [관리자]
-// - GET  /api/admins/users/              -> 회원 목록 조회 (page, size 쿼리 지원; 슈퍼관리자 권한 필요)
+// - GET  /api/admins/users/              -> 회원 목록 조회 (page, size, q 쿼리 지원; 슈퍼관리자 권한 필요)
 // - POST /api/admins/promote/            -> 관리자 승격 (user_seq 전달; 슈퍼관리자 권한 필요)
 // - POST /api/admins/demote/             -> 관리자 강등 (user_seq 전달; 슈퍼관리자 권한 필요)
 
@@ -231,9 +231,13 @@ export async function findPassword(payload: FindPasswordRequest) {
 }
 
 /* ────────────── (관리) 유틸 ────────────── */
-export async function getUsersList(page = 1, size = 10) {
+/** 검색어 q를 선택 인자로 받아 서버 전체 검색 + 페이지네이션 */
+export async function getUsersList(page = 1, size = 10, q?: string) {
+  const params: Record<string, string | number> = { page, size };
+  if (q && q.trim() !== "") params.q = q.trim();
+
   const res = await http.get<UsersListResponse>("/api/admins/users/", {
-    params: { page, size },
+    params,
   });
   return res.data;
 }

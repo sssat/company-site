@@ -8,7 +8,7 @@ export default function SignUpSuccessPage() {
   const location = useLocation() as LocState;
   const [params] = useSearchParams();
 
-  // 새로고침 대비: state → query(name) → 빈 문자열
+  // 새로고침 대비: state -> query(name) -> 빈 문자열
   const name =
     location.state?.name ??
     params.get("name") ??

@@ -93,9 +93,6 @@ class User(models.Model):
     # 관리자에서 일반 유저로 강등되면 null 값으로 대체됨
     granted_at = models.DateTimeField(null=True, blank=True, db_column="GRANTED_AT")   # DB에 비워 넣으려면 -> null=True. 폼/API에서 빈값 허용하려면 -> blank=True
 
-    # 계정 생성 일시
-    created_at = models.DateTimeField(db_column="CREATED_AT", default=timezone.now)
-
 
     # <함수 vs 프로퍼티>
     # 함수: obj.func() 처럼 괄호로 호출해야 함
@@ -176,6 +173,6 @@ class LoginLog(models.Model):
         # 보기 좋은 포맷(초까지, +09:00 포함)
         when = dt.isoformat(sep=" ", timespec="seconds")  # 예: 2025-09-28 15:38:37+09:00
 
-        return f"[{self.login_log_seq}] {self.input_id} @ {when} ({'SUCCESS' if self.is_success else 'FAIL'})"  # 예: asdf123 @ 2025-09-03 14:05:12+09:00 (SUCCESS)
+        return f"[{self.login_log_seq}] {self.input_id} @ {when} ({'SUCCESS' if self.is_success else 'FAIL'})"  # 예: [25] asdf123 @ 2025-09-03 14:05:12+09:00 (SUCCESS)
 
 

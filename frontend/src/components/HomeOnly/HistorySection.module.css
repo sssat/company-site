@@ -1,33 +1,49 @@
+/* ─────────────────────────────────────────
+   Timeline 섹션 (모바일 대응)
+   ───────────────────────────────────────── */
+
 /* 컨테이너 + 페이드-업 */
 .container {
-  padding: 100px 70px;
+  padding: clamp(56px, 12vh, 100px) clamp(16px, 6vw, 70px);
   max-width: 1200px;
   margin: 0 auto;
   opacity: 0;
   transform: translateY(60px);
   transition: opacity .9s ease-out, transform .9s ease-out;
+  overflow-x: clip; /* dot가 왼쪽으로 나갈 때 가로 스크롤 방지 */
 }
 .show { opacity: 1; transform: translateY(0); }
 .hidden {}
 
 .title {
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
-  font-size: 40px;
+  font-size: clamp(24px, 5.2vw, 40px);
   font-weight: 800;
-  margin: 0 0 36px;
+  margin: 0 0 clamp(16px, 4vw, 36px);
+  line-height: 1.2;
 }
 
 /* 2열 레이아웃 */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
-  gap: 56px;
+  gap: clamp(20px, 4.6vw, 56px);
   align-items: start;
 }
 
-/* 타임라인 래퍼: 라인/도트 영역 확보 */
+/* ───────── 타임라인 래퍼: 변수 기반 정렬 ─────────
+   --tl-pad:   텍스트 시작 전 확보할 왼쪽 패딩
+   --line-x:   타임라인 세로선의 X 위치(타임라인 왼쪽 기준)
+   --dot-size: 도트 지름
+   --dot-left: item 기준 dot의 left (계산값)
+*/
 .timeline {
-  padding-left: 64px;        /* 라인 + 도트 공간 */
+  --tl-pad: 64px;
+  --line-x: 18px;
+  --dot-size: 26px;
+  --dot-left: calc((var(--line-x) - var(--tl-pad)) - (var(--dot-size) / 2));
+
+  padding-left: var(--tl-pad);
   position: relative;
 }
 
@@ -35,7 +51,7 @@
 .timeline::before {
   content: "";
   position: absolute;
-  left: 18px;                /* 타임라인 왼쪽 기준 18px 지점 */
+  left: var(--line-x);
   top: 0; bottom: 0;
   width: 2px;
   background: #e5e7eb;
@@ -43,34 +59,25 @@
 
 /* 각 항목 */
 .item {
-  /* item 기준으로 dot을 배치하되, dot을 왼쪽으로 빼낼 것 */
   position: relative;
-  margin: 36px 0;
+  margin: clamp(20px, 4vh, 36px) 0;
   opacity: 0;
   transform: translateY(24px);
   transition: opacity .6s ease, transform .6s ease;
 }
-
-/* 등장 지연 */
 .show .item { opacity: 1; transform: translateY(0); }
 .delay0 { transition-delay: .05s; }
 .delay1 { transition-delay: .15s; }
 .delay2 { transition-delay: .25s; }
 .delay3 { transition-delay: .35s; }
 
-/* dot을 item 박스 왼쪽 밖으로 빼서 라인 중앙에 정렬
-   - 타임라인 padding-left: 64px
-   - 라인 중심: 18px
-   - item 컨텐츠 시작점(=텍스트 시작점): 0
-   → item 기준 라인 중심은 -46px (18 - 64)
-   → dot(지름 26px) 왼쪽 엣지는 -46 - 13 = -59px
-*/
+/* 도트: 라인 중앙에 정렬 */
 .dot {
   position: absolute;
-  left: -59px;              /* 핵심! 텍스트와 겹치지 않음 */
+  left: var(--dot-left); /* 계산된 위치 */
   top: 6px;
-  width: 26px;
-  height: 26px;
+  width: var(--dot-size);
+  height: var(--dot-size);
   border-radius: 50%;
   background: #ef4444;
   box-shadow: 0 2px 8px rgba(0,0,0,.2);
@@ -115,9 +122,32 @@
   object-fit: cover;
 }
 
-/* 반응형 */
+/* ───────── 반응형 ───────── */
+
+/* 태블릿 */
+@media (max-width: 1024px) {
+  .grid { gap: clamp(20px, 4vw, 40px); }
+  .timeline { --tl-pad: 52px; --line-x: 16px; --dot-size: 24px; }
+}
+
+/* 모바일: 1열 배치 + 타임라인 간격 축소 */
 @media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; gap: 28px; }
   .timeline { order: 2; }
   .imageWrap { order: 1; }
+
+  /* 타임라인 좌측 여백/도트/라인 스케일 다운 */
+  .timeline { --tl-pad: 44px; --line-x: 14px; --dot-size: 22px; }
+  .date, .desc { font-size: 15px; }
+}
+
+/* 소형 모바일 */
+@media (max-width: 480px) {
+  .timeline { --tl-pad: 36px; --line-x: 12px; --dot-size: 20px; }
+  .dot::after { transform: translate(-50%, -38%); } /* 작은 도트에 미세 보정 */
+}
+
+/* 모션 저감 선호 */
+@media (prefers-reduced-motion: reduce) {
+  .container, .item { transition: none; transform: none; }
 }

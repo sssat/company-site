@@ -1,3 +1,4 @@
+// src/main.tsx
 // export란? 
 // JavaScript에서 한 파일(모듈)의 변수·함수·클래스를 다른 파일에서 가져다 쓸 수 있게 내보내는 것
 // (1) Named Export
@@ -12,13 +13,14 @@
 // 여기서 React는 사용자가 지정하는 이름. 다만 관례적으로 'React'라고 부름  
 import React from "react";
 
-// react-dom/client 라이브러리에서 createRoot 라는 named export된 항목을 가져옴  
+// react-dom/client 라이브러리에서 default 객체(ReactDOM)를 가져와 사용
+// ReactDOM.createRoot(...) 로 루트 렌더러를 만든다.
 import ReactDOM from "react-dom/client";
 
 // react-router-dom 라이브러리에서 createBrowserRouter, RouterProvider 라는 named export된 항목을 가져옴  
 // React에서 라우팅(Routing) 기능은 앱이 "페이지를 전환하는 것처럼 보이게 만드는 기술"이다.
 // 하지만 실제로는 화면을 새로고침하지 않고 컴포넌트를 바꿔 끼우는 것이다.
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
 
 // App.tsx 파일에서 App 컴포넌트(App 함수) 임포트
 // App은 전체 화면의 뼈대가 되는 컴포넌트이다.
@@ -35,7 +37,7 @@ import "./index.css";
 import Home from "./pages/PublicPage/Home";
 import Products from "./pages/PublicPage/Products";
 import Media from "./pages/PublicPage/MediaPage/Media.tsx";
-import NewsDetailPage from "./pages/PublicPage/MediaPage/NewsDetailPage.tsx"; 
+import NewsDetailPage from "./pages/PublicPage/MediaPage/NewsDetailPage";
 import Team from "./pages/PublicPage/Team";
 import Contact from "./pages/PublicPage/Contact";
 
@@ -66,8 +68,8 @@ import UserManagementPage from "./pages/AdminPage/SuperAdminOnlyPage/UserManagem
 // (2) admin 페이지
 import NewsCreatePage from "./pages/AdminPage/NewsUpdatePage/NewsCreatePage.tsx";  // 뉴스 등록
 import NewsEditPage from "./pages/AdminPage/NewsUpdatePage/NewsEditPage.tsx";      // 뉴스 수정
-import ContactBoardPage from "./pages/AdminPage/ContactBoardPage/ContactBoardPage";                   // 문의하기 게시판
-import ContactBoardDetailPage from "./pages/AdminPage/ContactBoardPage/ContactBoardDetailPage.tsx";  // 개별 문의글 클릭 시 나오는 화면
+import ContactBoardPage from "./pages/AdminPage/ContactBoardPage/ContactBoardPage/ContactBoardPage";                   // 문의하기 게시판
+import ContactBoardDetailPage from "./pages/AdminPage/ContactBoardPage/ContactBoardDetailPage/ContactBoardDetailPage.tsx";  // 개별 문의글 클릭 시 나오는 화면
 
 // ------------------------------------------------------------------------------------------------
 
@@ -104,7 +106,7 @@ const router = createBrowserRouter([
       // 고정된 문자열이 아니라, 사용자가 어떤 값을 넣든 URL에 맞춰 매칭됨
       // ex) http://localhost:5173/media/bidderlive-1m-user 
       // => 라우트 경로: media/:slug, 실제 매칭된 slug 값: bidderlive-1m-user, 렌더: <App />(틀) + <NewsDetailPage />(본문)
-      { path: "media/:slug", element: <NewsDetailPage /> }, 
+      { path: "media/:news_seq", element: <NewsDetailPage /> },
 
       // 4. 와일드 카드 라우트
       // 사용자가 입력한 URL이 자식 라우트 목록 중 어디에도 맞지 않으면 이 라우트가 매칭된다.
@@ -132,7 +134,7 @@ const router = createBrowserRouter([
 
       // (5) 뉴스룸 업데이트
       { path: "media/new", element: <NewsCreatePage /> },
-      { path: "media/:slug/edit", element: <NewsEditPage /> },
+      { path: "media/:news_seq/edit", element: <NewsEditPage /> },
 
       // (6) SUPER_ADMIN 전용 - 회원 등급 관리 페이지
       { 
@@ -144,23 +146,20 @@ const router = createBrowserRouter([
         )
       },
       
-      // (7) ADMIN/SUPER_ADMIN 전용 - 문의하기 게시판
+      /* 5) ADMIN/SUPER_ADMIN 전용 — 문의 게시판(중첩) */
       {
         path: "contact/board",
         element: (
           <RequireRole allowed={["ADMIN", "SUPER_ADMIN"]}>
-            <ContactBoardPage />
+            <Outlet /> {/* ← 자식 라우트 렌더링 */}
           </RequireRole>
-        )
+        ),
+        children: [
+          { index: true, element: <ContactBoardPage /> },          // /contact/board
+          { path: ":id", element: <ContactBoardDetailPage /> },    // /contact/board/7
+          { path: ":id/", element: <ContactBoardDetailPage /> },   // /contact/board/7/ (허용)
+        ],
       },
-      {
-        path: "contact/board/:id",
-        element: (
-          <RequireRole allowed={["ADMIN", "SUPER_ADMIN"]}>
-            <ContactBoardDetailPage />
-          </RequireRole>
-        )
-      }
     ]
   }
 ]);

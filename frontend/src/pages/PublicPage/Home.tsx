@@ -1,9 +1,11 @@
+// src/pages/PublicPage/Home.tsx
+// 이처럼 단순 조립만 하는거면 굳이 Home.module.css 파일이 필요없다.
 import HeroSlider from "../../components/HeroSlider/HeroSlider";
 import AdminRoleNotice from "../../components/AdminRoleNotice/AdminRoleNotice";
 import FeatureIntro from "../../components/HomeOnly/FeatureIntro";
 import InnovationSection from "../../components/HomeOnly/InnovationSection";
 import HistorySection from "../../components/HomeOnly/HistorySection"; 
-import DirectionsSection from "../../components/DirectionSection/DirectionsSection";
+import DirectionsSection from "../../components/DirectionsSection/DirectionsSection";
 import ContactButton from "../../components/ContactButton/ContactButton";
 
 export default function Home() {

@@ -1,14 +1,17 @@
+/* // src/components/MediaOnly/NewsDetail.module.css */
+
 /* 페이지 여백(하단은 Footer와 간격을 크게 두지 않음) */
-.section { padding: 0; margin: 36px 0 24px; }
+.section { padding: 0; margin: clamp(24px, 6vh, 36px) 0 24px; }
 
 /* 컨텐트 래퍼 + 페이드업 */
 .wrap {
   max-width: 880px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 clamp(12px, 4vw, 20px);
   opacity: 0;
   transform: translateY(40px);
   transition: opacity .8s ease-out, transform .8s ease-out;
+  overflow-x: clip; /* 서브픽셀 가로 스크롤 방지 */
 }
 .show { opacity: 1; transform: translateY(0); }
 .hidden {}
@@ -19,7 +22,7 @@
   background: #0f172a;
   width: 100%;
   border-radius: 2px;
-  margin: 12px 0 24px;
+  margin: clamp(8px, 1.6vw, 12px) 0 clamp(16px, 2.4vw, 24px);
 }
 
 /* 상단 행: 좌측 제목 / 우측 등록일 */
@@ -28,7 +31,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;       /* 좁은 화면에서 줄바꿈 허용 */
 }
+.headerRow > * { min-width: 0; }
 
 /* 제목 */
 .title {
@@ -37,8 +42,10 @@
   color: #0f172a;
   font-family: "Poppins", "Noto Sans KR", sans-serif;
   font-weight: 900;
-  font-size: 20px;
+  font-size: clamp(18px, 3.4vw, 24px);
   line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* 등록일 */
@@ -55,19 +62,19 @@
   border: 0;
   height: 1px;
   background: #e5e7eb;
-  margin: 18px 0 12px;
+  margin: clamp(12px, 2.4vw, 18px) 0 clamp(8px, 2vw, 12px);
 }
 
-/* ✅ 이미지: 제목 얇은선(.hr) 아래에 위치 */
+/* 대표 이미지(히어로): 제목 얇은선(.hr) 아래에 위치 */
 .hero {
-  /* 원하는 값으로 덮어쓸 수 있는 변수들 */
+  /* 덮어쓸 수 있는 변수들 */
   --hero-w: 60%;
   --hero-max-w: 100%;
   --hero-ratio: 16 / 9;     /* auto, 1/1, 4/3 등 */
   --hero-fit: cover;        /* cover | contain */
   --hero-max-h: none;       /* 예: 360px */
 
-  width: var(--hero-w);
+  width: min(var(--hero-w), 100%);
   max-width: var(--hero-max-w);
   margin: 0 0 18px;
   margin-inline: auto;      /* 가로 중앙 정렬 */
@@ -84,13 +91,41 @@
   max-height: var(--hero-max-h);
 }
 
-/* 본문 문단 */
-.article p {
+/* 본문 컨테이너 */
+.article { margin-top: 8px; }
+
+/* 본문 문단 래퍼(HTML 조각을 dangerouslySetInnerHTML로 삽입) */
+.paragraph {
   margin: 0 0 16px;
   line-height: 1.85;
   color: #111827;
-  font-size: 15px;
+  font-size: clamp(14px, 2.6vw, 15px);
 }
+
+/* 본문 내 미디어 (이미지만 크게, 가운데 정렬) */
+.article :where(img) {
+  display: block;
+  width: clamp(70%, 90%, 100%);
+  max-width: 680px;    /* 데스크톱에서 너무 작지 않게 */
+  height: auto;
+  margin: 16px auto;   /* 중앙 정렬 */
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.article :where(video, iframe) {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;  /* 반응형 비율 */
+  height: auto;
+  margin: 12px 0;
+  border: 0;
+}
+
+/* 리스트/링크 등 기본 타이포 */
+.article :where(ul, ol) { margin: 0 0 16px 20px; }
+.article a { color: #1d4ed8; text-decoration: underline; }
+.article strong { font-weight: 700; }
+.article em { font-style: italic; }
 
 /* 얇은 구분선 (본문 아래) */
 .hrBottom {
@@ -109,7 +144,7 @@
   justify-content: center;
   inline-size: auto;
   block-size: 48px;
-  padding: 0 44px;
+  padding: 0 clamp(28px, 8vw, 44px);
   background: #0f172a;
   color: #fff;
   border-radius: 10px;
@@ -118,9 +153,8 @@
   line-height: 1;
   white-space: nowrap;
   box-sizing: border-box;
+  font-size: clamp(14px, 3.2vw, 16px);
 }
-
-/* 링크/호버 시에도 색상 변화 없도록 고정 */
 .listBtn:hover,
 .listBtn:focus,
 .listBtn:active,
@@ -128,13 +162,14 @@
   color: #fff;
   text-decoration: none;
   filter: none;
+  outline: none;
 }
 
 /* 데이터 없음/에러 */
 .fallback {
   max-width: 880px;
   margin: 40px auto;
-  padding: 0 20px;
+  padding: 0 clamp(12px, 4vw, 20px);
   text-align: center;
 }
 .backBtn {
@@ -146,4 +181,18 @@
   cursor: pointer;
   text-decoration: none;
   color: #0f172a;
+}
+
+/* 반응형 */
+@media (max-width: 640px) {
+  .title { font-size: clamp(17px, 5vw, 18px); }
+  .hero  { --hero-w: 100%; border-radius: 10px; }
+  .article :where(img) { width: 100%; max-width: 100%; } /* 모바일에선 꽉 차게 */
+  .headerRow { gap: 8px; }
+  .regDate { order: 2; }  /* 제목 아래로 내려가도록 */
+}
+
+/* 모션 저감 선호 */
+@media (prefers-reduced-motion: reduce) {
+  .wrap { transition: none; transform: none; }
 }

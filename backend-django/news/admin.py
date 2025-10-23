@@ -8,4 +8,4 @@ class NewsPostrAdmin(admin.ModelAdmin):
 
 @admin.register(NewsPostHistory)
 class NewsPostHistoryrAdmin(admin.ModelAdmin):
-    readonly_fields = ("history_seq",)  
+    readonly_fields = ("history_seq", "news_seq_snapshot")
