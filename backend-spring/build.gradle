@@ -1,38 +1,67 @@
+// build.gradle: Gradle 빌드 설정 파일
+// => Spring Boot 프로젝트에서 의존성(라이브러리), Java 버전, 플러그인, 빌드/테스트 방법 등을 정의해 두는 핵심 설정 스크립트
+
+// 플러그인 섹션
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '3.4.2'
-	id 'io.spring.dependency-management' version '1.1.7'
+    id 'java'
+    id 'org.springframework.boot' version '3.4.2'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
+// 프로젝트 메타정보
 group = 'com.marketstage'
 version = '0.0.1-SNAPSHOT'
 description = 'Demo project for Spring Boot'
 
+// Java 툴체인
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
-	}
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
+// 저장소
 repositories {
-	mavenCentral()
+    mavenCentral()
 }
 
+// 의존성
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.flywaydb:flyway-core'
-	implementation 'org.hibernate.orm:hibernate-community-dialects'
-	runtimeOnly 'org.xerial:sqlite-jdbc:3.45.1.0'   
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.security:spring-security-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // 애플리케이션
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // (선택) 스프링이 JWT 검증까지 해주길 원하면 유지
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // 메일(SMTP)
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // DB / 마이그레이션
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-sqlite'   
+    implementation 'org.hibernate.orm:hibernate-community-dialects'
+    runtimeOnly   'org.xerial:sqlite-jdbc:3.45.1.0'
+
+    // JWT (JJWT)
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
+    runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.12.5'
+    runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.12.5'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly   'org.junit.platform:junit-platform-launcher'
 }
 
+// 테스트 태스크 설정
 tasks.named('test') {
-	useJUnitPlatform()
+    useJUnitPlatform()
 }
