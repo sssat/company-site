@@ -1,0 +1,160 @@
+/* src/components/HomeOnly/InnovationSection.module.css */ 
+
+/* 컨테이너 + 페이드-업 애니메이션 */
+.container {
+  padding: 0 clamp(12px, 4vw, 20px);
+  max-width: 1100px;
+  margin: 0 auto;
+  opacity: 0;
+  transform: translateY(60px);
+  transition: opacity 0.9s ease-out, transform 0.9s ease-out;
+}
+.show   { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+/* ───── 타이틀 (Anton 계열) ───── */
+.title {
+  font-family: "Anton", "Noto Sans KR", sans-serif;
+  font-size: clamp(24px, 5.4vw, 50px);
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin: 0 0 clamp(16px, 5vw, 40px);
+  text-align: left;
+}
+
+/* ───── 로고 + 설명 2열 ───── */
+.headerRow {
+  display: flex;
+  gap: clamp(20px, 6vw, 60px);
+  align-items: flex-start;
+  flex-wrap: wrap; /* 좁은 화면에서 자동 줄바꿈 */
+}
+
+/* 비디오/이미지 공용 (둥근 모서리 적용) */
+.mainLogo {
+  flex: 0 1 clamp(240px, 42vw, 520px); /* 유동 너비 */
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  border-radius: 16px;
+}
+
+/* 워드마크 이미지 */
+.wordmark {
+  width: clamp(180px, 60vw, 400px);
+  height: auto;
+  margin: clamp(8px, 4vw, 20px) 0 20px;
+}
+
+/* (선택) 워드마크를 텍스트로 쓸 때 */
+.wordmarkText {
+  font-family: "Anton", "Noto Sans KR", sans-serif;
+  font-size: clamp(18px, 4.2vw, 32px);
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.headerText {
+  flex: 1 1 280px;
+  min-width: 0;      /* 긴 단어로 인한 넘침 방지 */
+  text-align: left;
+}
+
+/* 카피(한글) */
+.tagline {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  font-size: clamp(18px, 3.8vw, 28px);
+  line-height: 1.45;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.slogan {
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  color: #da1ac4;
+  font-size: clamp(18px, 3.8vw, 28px);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* ───── 기능 리스트 ───── */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: clamp(16px, 5vw, 60px);
+  justify-content: center;
+  margin: clamp(40px, 10vw, 80px) 0 clamp(48px, 12vw, 90px);
+  padding: 0;
+  list-style: none;
+}
+
+.features li {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0; /* 텍스트 줄바꿈 안전 */
+}
+
+.features li > img {
+  width: clamp(40px, 8vw, 60px);
+  height: clamp(40px, 8vw, 60px);
+  margin-bottom: 12px;
+}
+
+.features h4 {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  font-size: clamp(14px, 2.8vw, 18px);
+  font-weight: 700;
+  margin: 8px 0;
+}
+
+.features p {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  font-size: clamp(12px, 2.6vw, 14px);
+  font-weight: 500;
+  color: #da1ac4;
+}
+
+/* ───── 기능별 스크린샷 박스 ───── */
+.shotBox {
+  position: relative;
+  width: min(200px, 100%);   /* ← 셀(컨테이너) 기준으로 제한 */
+  max-width: 100%;
+  aspect-ratio: 10 / 16;
+  margin: 30px auto 0;
+  overflow: hidden;
+  border-radius: 16px;
+  box-sizing: border-box;     /* 안전장치 */
+}
+
+.shotBox img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+  border-radius: inherit;
+}
+
+.shown      { opacity: 1 !important; transform: translateY(0) !important; }
+.hiddenShot { opacity: 0 !important; transform: translateY(40px) !important; }
+
+/* ───── 반응형 (≤768 px) ───── */
+@media (max-width: 768px) {
+  .title      { text-align: center; }
+  .headerText { text-align: center; }
+  .wordmark   { margin: 0 auto 20px; }
+}
+
+/* 모션 선호도: 저감 모드에서 애니메이션 완화 */
+@media (prefers-reduced-motion: reduce) {
+  .container, .shotBox img { transition: none; transform: none; }
+}

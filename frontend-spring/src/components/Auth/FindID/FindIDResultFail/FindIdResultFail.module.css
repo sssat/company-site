@@ -1,0 +1,70 @@
+/* 레이아웃 */
+.section {
+  padding: 32px 16px;
+  display: flex;
+  justify-content: center;
+}
+.wrap {
+  --card-width: 420px;
+  width: min(100%, var(--card-width));
+  margin: 0 auto;
+}
+.card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  padding: 24px 22px 20px;
+  text-align: left; /* ← 좌측 정렬 */
+}
+.card * { box-sizing: border-box; }
+
+/* 타이틀 */
+.title {
+  margin: 0 0 14px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #3ba1ff;
+  letter-spacing: 0.2px;
+}
+
+/* 메시지(좌측 정렬) */
+.message {
+  margin: 6px 2px 0;
+  font-size: 16px;
+  color: #111827;
+}
+
+/* 버튼들 */
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+.btn {
+  flex: 1;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .02s ease, opacity .2s ease;
+  user-select: none;
+}
+.btn:active { transform: translateY(1px); }
+
+/* 회색 버튼: 아이디 찾기 */
+.secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+.secondary:hover { opacity: .9; }
+
+/* 파란 버튼: 회원가입 */
+.primary {
+  background: #3ba1ff;
+  color: #ffffff;
+}
+.primary:hover { opacity: .92; }

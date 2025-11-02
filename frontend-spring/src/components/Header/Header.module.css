@@ -1,0 +1,161 @@
+/* src/components/Header/Header.module.css */
+
+/* ───────── 헤더(상단 고정) ───────── */
+.header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 50;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.12),
+    0 8px 16px -12px rgba(0, 0, 0, 1);
+  padding-top: env(safe-area-inset-top); /* iOS 상단 안전영역 */
+}
+
+
+/* ───────── 내부 레이아웃 컨테이너 ───────── */
+.inner {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 20px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* ───────── 브랜드(로고) ───────── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brandLink {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.brandLink:focus-visible {
+  outline: 2px solid #3ba1ff;
+  outline-offset: 2px;
+}
+
+/* 고정 크기 → 유동 크기 (모바일 넘침 방지) */
+.logo {
+  width: clamp(140px, 34vw, 220px);
+  height: auto;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+/* ───────── 내비게이션(Pill) ───────── */
+.nav {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+  overflow-x: auto;               /* 가로 스크롤 */
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;  /* 스크롤 스냅(부드럽게) */
+}
+.nav::-webkit-scrollbar { display: none; }
+
+.pill {
+  padding: 10px 18px;
+  border-radius: 20px;
+  background: #f2f4f7;
+  color: #111827;
+  text-decoration: none;
+  font-size: 14px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  white-space: nowrap;
+  scroll-snap-align: start;
+}
+.pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px -10px rgba(0, 0, 0, 0.4);
+}
+.active {
+  background: #3ba1ff;
+  color: #fff;
+  box-shadow: 0 8px 18px -8px rgba(59, 161, 255, 0.8);
+}
+
+/* ───────── 우측 사용자/인증 영역 ───────── */
+.authArea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 8px;
+}
+.authLink { font-size: 14px; font-weight: 400; color: #111827; text-decoration: none; }
+.authLink:hover { text-decoration: underline; }
+.divider { color: #9ca3af; }
+
+/* ───────── 로그인 상태: 사용자 메뉴 ───────── */
+.userArea { position: relative; display: inline-flex; align-items: center; }
+.userTrigger {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border: 0; background: #f8fafc; color: #111827;
+  border-radius: 999px; font-size: 14px; cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+.userTrigger:hover { background: #eef2f7; transform: translateY(-1px); box-shadow: 0 6px 14px -10px rgba(0,0,0,.2); }
+.adminBadge { font-size: 12px; font-weight: 700; line-height: 1; background: #e0f2ff; color: #0369a1; padding: 4px 8px; border-radius: 999px; }
+.userName { font-size: 14px; font-weight: 700; color: #111827; }
+.caret { font-size: 12px; opacity: 0.6; }
+
+/* 드롭다운 메뉴 */
+.userMenu {
+  position: absolute; right: 0; top: calc(100% + 8px);
+  min-width: 180px; padding: 6px; background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 12px; box-shadow: 0 12px 24px rgba(0,0,0,.08); z-index: 60;
+}
+.menuItem {
+  display: block; width: 100%; text-align: left; padding: 10px 12px;
+  border: 0; background: none; cursor: pointer; border-radius: 10px;
+  color: #111827; text-decoration: none; font-size: 14px;
+}
+.menuItem:hover { background: #f3f4f6; }
+
+/* ───────── 반응형 ───────── */
+/* 1) 태블릿↓: 헤더를 2행 그리드로(1행: 브랜드+유저 / 2행: 내비) */
+@media (max-width: 768px) {
+  .inner {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand auth"
+      "nav   nav";
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px 10px;
+  }
+  .brand { grid-area: brand; }
+  .nav   { grid-area: nav; margin-left: 0; gap: 12px; }
+  .authArea { grid-area: auth; gap: 8px; }
+
+  .pill { padding: 8px 14px; font-size: 13px; }
+}
+
+/* 2) 모바일(좁은 폭): 더 컴팩트하게, 내비는 '가로 스크롤' 고정 */
+@media (max-width: 480px) {
+  .inner { gap: 6px 8px; padding: 10px 8px; }
+
+  .nav {
+    flex-wrap: nowrap;       /* 줄바꿈 금지: 헤더가 길어지는 것 방지 */
+    gap: 10px;
+    padding-bottom: 2px;     /* 터치 스크롤 여유 */
+  }
+
+  .pill { padding: 6px 12px; font-size: 12px; }
+  .authLink, .userName { font-size: 12px; }
+
+  /* 버튼 패딩 축소 및 배지/이름 과도 노출 방지 */
+  .userTrigger { padding: 6px 10px; }
+  .adminBadge { display: none; }   /* 필요시 유지해도 OK */
+}
+
+/* 초소형 기기(선택): 사용자 이름 감추기 */
+@media (max-width: 360px) {
+  .userName { display: none; }
+}

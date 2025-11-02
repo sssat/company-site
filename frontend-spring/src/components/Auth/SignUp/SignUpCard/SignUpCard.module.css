@@ -1,0 +1,154 @@
+/* src/components/Auth/SignUp/SignUpCard/SignUpCard.module.css  */
+:root {
+  --input-h: 44px;
+  --input-br: 10px;
+  --short-input-w: 72%;
+}
+
+.section {
+  padding: 32px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ─── 폭 제어: 모바일에서 넘치지 않게 ─── */
+.wrap {
+  /* 기존 변수는 유지하되 기본 min을 0으로 */
+  --_w:     var(--card-width, 420px);
+  --_w-min: var(--card-min-width, 0px);     /* ← 480px → 0px */
+  --_w-max: var(--card-max-width, 560px);
+
+  width: min(100%, var(--_w));
+  min-width: var(--_w-min);
+  max-width: min(100%, var(--_w-max));      /* 100% 상한 추가 */
+}
+
+.card {
+  /* 세로 길이 제어 */
+  --_h:     var(--card-height, auto);
+  --_h-min: var(--card-min-height, auto);
+  --_h-max: var(--card-max-height, none);
+
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  padding: 24px;
+
+  height: var(--_h);
+  min-height: var(--_h-min);
+  max-height: var(--_h-max);
+
+  /* 고정 높이로 쓸 땐 --card-overflow: auto 로 바꿔 내부 스크롤 가능 */
+  overflow: var(--card-overflow, hidden);
+}
+
+.card * { box-sizing: border-box; }
+
+.logo {
+  display: block;
+  margin: 4px auto 46px;
+  height: 90px;
+}
+
+.form { display: block; }
+
+/* ───────── 라벨 위·입력 아래(세로 스택) ───────── */
+.row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;                 /* 라벨과 입력 사이 간격 */
+  margin-bottom: 14px;
+}
+
+/* 라벨 텍스트 */
+.label {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 600;
+}
+
+/* ───────── 입력 공통 ───────── */
+.input,
+.select {
+  width: 100%;
+  height: var(--input-h);
+  border: 1px solid #e5e7eb;
+  border-radius: var(--input-br);
+  padding: 0 12px;
+  background: #fff;
+}
+
+/* 아이디/이메일: 입력칸(좌) + 버튼(우) 바깥 배치 */
+.inlineOut {
+  display: grid;
+  grid-template-columns: minmax(0, var(--short-input-w)) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0; /* grid 넘침 방지 */
+}
+
+/* 바깥 버튼(중복확인) */
+.sideBtn {
+  height: var(--input-h);
+  padding: 0 12px;
+  white-space: nowrap;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--input-br);
+  background: #f3f4f6;
+  cursor: pointer;
+}
+.sideBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* (참고) 입력 내부에 버튼을 겹치는 패턴이 필요할 때 사용할 수 있는 유틸.
+   현재 파일에서는 사용하지 않지만 호환을 위해 남겨둠. */
+.adornField { position: relative; min-width: 0; }
+.hasRightBtn { padding-right: 108px; }
+.adornBtn {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  height: calc(var(--input-h) - 8px); padding: 0 10px;
+  border: 1px solid #e5e7eb; border-radius: calc(var(--input-br) - 2px);
+  background: #f3f4f6; font-size: 12.5px; line-height: 1; white-space: nowrap;
+}
+
+/* 생년월일 3분할 */
+.triple {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+/* 약관 */
+.terms {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 6px 0 8px;
+}
+
+/* 제출 버튼 */
+.submit {
+  width: 100%;
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: #3ba1ff;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 메시지 */
+.error,
+.ok {
+  font-size: 12px;
+  margin: 4px 0 8px 0;
+}
+.error { color: #ef4444; }
+.ok    { color: #16a34a; }
+
+/* 더 안전한 모바일 오버라이드 */
+@media (max-width: 480px) {
+  .wrap { width: 100%; min-width: 0; max-width: 100%; }
+  .card { padding: 20px; }                  /* 안쪽 패딩도 살짝 줄이기 */
+}

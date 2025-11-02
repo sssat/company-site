@@ -1,0 +1,67 @@
+/* CTA 래퍼 */
+.ctaWrap {
+  /* 데스크톱에선 여유, 모바일에선 자동 축소 */
+  margin-top: clamp(40px, 14vh, 206px);
+  display: flex;
+  justify-content: center;
+
+  /* 페이드-업 초기 상태 */
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+  will-change: opacity, transform;
+
+  /* 작은 화면에서 좌우가 붙지 않도록 약간의 패딩 */
+  padding: 0 clamp(12px, 4vw, 20px);
+}
+
+/* 보이기 상태 */
+.show { opacity: 1; transform: translateY(0); }
+
+/* CTA 버튼 */
+.cta {
+  display: inline-flex;                 /* 아이콘/텍스트 정렬에 유리 */
+  align-items: center;
+  justify-content: center;
+
+  /* 터치 타깃 보장 + 반응형 패딩/폰트 */
+  min-height: 48px;
+  padding: clamp(12px, 2.6vw, 16px) clamp(18px, 4.6vw, 28px);
+  font-size: clamp(16px, 4.2vw, 20px);
+  line-height: 1;
+
+  border-radius: 12px;
+  background: #3ba1ff;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 28px rgba(17, 24, 39, 0.08);
+
+  /* 모바일 터치/텍스트 가독성 보강 */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-text-fill-color: #fff; /* iOS에서 색 반전 방지 */
+}
+
+/* 인터랙션 */
+.cta:hover   { transform: translateY(-1px); }
+.cta:active  { transform: translateY(0); }
+.cta:focus-visible {
+  outline: 2px solid #94caff;
+  outline-offset: 2px;
+}
+
+/* 모바일 레이아웃 */
+@media (max-width: 900px) {
+  .cta {
+    width: 100%;
+    max-width: 420px;          /* 한 줄로 크고 시원하게 */
+    text-align: center;
+  }
+}
+
+/* 모션 저감 선호 시 */
+@media (prefers-reduced-motion: reduce) {
+  .ctaWrap { transition: none; transform: none; }
+  .cta { transition: none; }
+}

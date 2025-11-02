@@ -1,0 +1,116 @@
+/* ───────── 공통 푸터 영역 ───────── */
+.footer {
+  color: #ffffff;
+  /* 폰트/여백이 화면 크기에 맞게 자동 조절 */
+  font-size: clamp(14px, 1.6vw + 0.2rem, 20px);
+  margin-top: clamp(48px, 10vh, 100px);
+  /* 풀블리드 요소의 미세한 계산 오차로 생기는 가로 스크롤 방지 */
+  overflow-x: clip; /* 지원이 부족하면 hidden으로 바꿔도 OK */
+}
+
+/* ───────── 내부 고정 폭 컨테이너 ───────── */
+.inner {
+  /* 1500px 이하에서는 92% 폭, 이상은 1500px로 제한 */
+  width: min(92%, 1500px);
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+/* ───────── 파트너 영역 (색상: A) ───────── */
+.partnersBlock {
+  background: #0b0b0b;
+  padding: clamp(32px, 6vh, 48px) 0 clamp(16px, 4vh, 24px);
+}
+
+/* 파트너 영역 제목 */
+.partnersTitle {
+  font-size: clamp(22px, 3.4vw, 34px);
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 clamp(12px, 2.4vh, 24px);
+}
+
+/* ── 로고 스트립: 진짜 풀블리드(스크롤바 포함 폭) ──
+   - 부모 .inner의 폭 제약을 벗어나 화면 끝까지 확장
+   - 가로 스크롤이 생기지 않도록 overflow를 안전하게 처리 */
+.stripWrap {
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* 파트너 로고 이미지
+   - 데스크톱: 70vw까지 확대하되 가운데 정렬
+   - 모바일: 100vw로 자연스럽게 꽉 채움(아래 @media) */
+.partnerStrip {
+  display: block;
+  width: clamp(320px, 70vw, 1200px);
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+/* ───────── 하단 회사/연락처 영역 (색상: B) ───────── */
+.bottomBlock {
+  background: #181818;
+  /* iOS 하단 홈 인디케이터 안전영역 고려 */
+  padding: clamp(32px, 6vh, 48px) 0 max(clamp(40px, 8vh, 60px), env(safe-area-inset-bottom));
+}
+
+/* 회사 정보와 연락처 레이아웃 */
+.bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: clamp(16px, 2.8vw, 32px);
+  flex-wrap: wrap;   /* 줄바꿈 허용 */
+}
+
+/* 회사/연락처 공통 스타일 */
+.company,
+.contact {
+  line-height: 1.8;
+  white-space: pre-line;
+  min-width: 0;      /* 긴 텍스트로 인한 넘침 방지 */
+}
+
+/* 연락처 제목 스타일 */
+.contact h3 {
+  font-size: clamp(16px, 1.6vw + 0.2rem, 18px);
+  margin: 0 0 8px;
+}
+
+/* ─────────────────────────────────────────
+   반응형: 태블릿(<= 768px)
+────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .company, .contact { line-height: 1.7; }
+}
+
+/* ─────────────────────────────────────────
+   반응형: 모바일(<= 600px)
+   - 컬럼 1열 전환, 여백 축소
+   - 로고 스트립을 100vw로
+────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .inner { width: 92%; }
+  .bottom { flex-direction: column; gap: 16px; }
+  .contact h3 { margin-top: 16px; }
+
+  /* 로고 스트립: 화면 양끝 딱 맞게 */
+  .partnerStrip { width: 100vw; max-width: none; }
+}
+
+/* ─────────────────────────────────────────
+   반응형: 소형 모바일(<= 420px)
+────────────────────────────────────────── */
+@media (max-width: 420px) {
+  .footer { margin-top: 72px; }
+  .partnersBlock { padding: 32px 0 16px; }
+  .bottomBlock { padding: 32px 0 max(40px, env(safe-area-inset-bottom)); }
+}

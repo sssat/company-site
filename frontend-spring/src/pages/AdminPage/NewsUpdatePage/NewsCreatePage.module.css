@@ -1,0 +1,200 @@
+/* src/pages/AdminPage/NewsUpdatePage/NewsCreatePage.module.css */
+/* ===== 레이아웃 ===== */
+.section { padding: 0; }
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+/* 제목 */
+.title {
+  font-family: "Poppins","Noto Sans KR",sans-serif;
+  font-weight: 900;
+  font-size: 32px;
+  margin: 8px 0 18px;
+}
+
+/* 폼 공통 */
+.form { border-top: 1px solid #e5e7eb; }
+.row, .rowCol {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.rowCol { align-items: start; }
+.label { color: #111827; font-weight: 700; }
+
+/* 입력 요소 */
+.input, .select, .textarea {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 4px;
+  padding: 10px 12px;
+  outline: none;
+  font-size: 14px;
+}
+
+/* 카테고리 박스 폭 축소 (데스크탑 320px / 모바일 100%) */
+.select {
+  width: 320px;
+  max-width: 100%;
+}
+
+.input, .textarea { width: 100%; }
+.input:focus, .select:focus, .textarea:focus {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(156,163,175,.25);
+}
+.textarea {
+  min-height: 320px;
+  resize: vertical;
+}
+
+/* 요약 상자 높이 조금 낮게 */
+.excerptBox {
+  min-height: 100px;
+}
+
+/* 본문 편집 바(이미지 첨부 버튼) */
+.editorBar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.smallBtn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 4px;
+  font-weight: 800;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+.smallBtn:hover { background: #f8fafc; }
+
+/* 본문 이미지 썸네일 리스트 */
+.inlinePreviewList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.inlineThumb {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.inlineThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.inlineRemove {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255,255,255,.9);
+  cursor: pointer;
+}
+
+/* 파일 라인(대표 이미지) */
+.fileLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fileBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fileBtn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.fileName { color: #6b7280; font-size: 14px; }
+.clearBtn {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 대표 이미지 미리보기 */
+.previewWrap { margin-top: 12px; }
+.preview {
+  display: block;
+  width: 320px;
+  height: 200px;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+/* 액션 버튼 (텍스트 수직 중앙 정렬) */
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  padding-top: 24px;
+}
+.primary, .ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  height: 40px;
+  padding: 0 16px;
+  line-height: 1;
+  box-sizing: border-box;
+  border-radius: 4px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.primary {
+  background: #2563eb;   /* 블루 */
+  color: #fff;
+}
+.primary:disabled { opacity: .6; cursor: not-allowed; }
+.ghost {
+  background: #fff;
+  color: #111827;
+  border-color: #e5e7eb;
+}
+.ghost:hover { background: #f8fafc; }
+
+/* 반응형 */
+@media (max-width: 640px) {
+  .row, .rowCol { grid-template-columns: 1fr; }
+  .label { margin-bottom: 6px; }
+  .preview { width: 100%; height: auto; }
+  .select { width: 100%; } /* 모바일에선 꽉 차게 */
+}

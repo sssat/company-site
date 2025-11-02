@@ -1,0 +1,130 @@
+/* 섹션: 페이드업 */
+.section {
+  padding: 0;
+  margin: 80px 0 0;
+  opacity: 0;
+  transform: translateY(48px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+}
+.show { opacity: 1; transform: translateY(0); }
+.hidden {}
+
+/* 가운데 정렬 컨테이너 */
+.wrap {
+  --faq-width: 680px;          /* ← FAQ 최대 폭 (필요하면 760/960 등으로 조절) */
+  max-width: 1100px;
+  margin: 0 auto 120px;
+  padding: 0 20px;
+  display: flex;
+  justify-content: center;
+}
+.stack {
+  width: min(100%, var(--faq-width));
+}
+
+/* 제목 */
+.title {
+  font-family: "Poppins", "Noto Sans KR", sans-serif;
+  font-weight: 900;
+  font-size: 38px;
+  margin: 0 0 26px 0;   /* 타이틀 - 내용 사이 거리 조절 */
+}
+
+/* 리스트 */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+/* 개별 아이템 */
+.item {
+  background: #f6f7f9;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(0,0,0,.02);
+  overflow: hidden;
+
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity .5s ease-out,
+    transform .5s ease-out,
+    border-color .25s ease,
+    box-shadow .25s ease;
+}
+.item.show { opacity: 1; transform: translateY(0); }
+.item.active {
+  border-color: #c7d2fe;               /* indigo-200 */
+  box-shadow: 0 4px 14px rgba(79,70,229,.08);
+}
+
+/* 질문 버튼 */
+.q {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.q:hover { background: rgba(0,0,0,.02); }
+
+.qBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  font-weight: 800;
+  font-size: 14px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+}
+.qText {
+  font-family: "Noto Sans KR", sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  color: #111827;
+}
+.item.active .qText { color: #2563eb; }   /* blue-600 */
+
+.icon {
+  font-size: 18px;
+  font-weight: 900;
+  color: #111827;
+  padding-left: 8px;
+}
+
+/* 답변 */
+.answer {
+  overflow: hidden;              /* max-height 트랜지션 */
+  transition: max-height .28s ease;
+}
+.aText {
+  margin: 0;
+  padding: 0 16px 14px 16px;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
+}
+.aBadge {
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: 900;
+  color: #64748b;                /* slate-500 */
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .title { font-size: 24px; }
+  .wrap  { --faq-width: 100%; }
+}

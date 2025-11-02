@@ -1,0 +1,61 @@
+.btn{
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border: none;
+  outline: none;
+  border-radius: 16px;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 12px 36px rgba(2, 6, 23, .12);
+  cursor: pointer;
+
+  /* 중앙 정렬 핵심 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;         /* 아이콘이 정확히 가운데 오도록 */
+  line-height: 0;     /* inline 요소 기준 여백 제거 */
+}
+
+.btn:focus { outline: none; }
+.btn:focus-visible { outline: none; }
+
+@media (hover: hover) {
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 36px rgba(17, 24, 39, 0.18);
+  }
+  .btn:active {
+    transform: translateY(0);
+  }
+}
+
+/* 아이콘 크기/두께 */
+.icon{
+  width: 24px;        /* 원하는 크기 */
+  height: 24px;
+  display: block;     /* 베이스라인 영향 제거 */
+}
+
+.chevron{
+  stroke: currentColor;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 노출 전환 */
+.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.hide {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
