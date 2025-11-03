@@ -5,6 +5,8 @@
 
 package com.marketstage.backend.accounts.application.service;
 
+import com.marketstage.backend.common.exception.NotFoundException;
+
 // 도메인 엔티티 임포트
 import com.marketstage.backend.accounts.domain.model.User;
 import com.marketstage.backend.accounts.domain.model.UserLevel;
@@ -30,9 +32,13 @@ import java.util.Base64;
 
 // 장고와 동일한 sha256 hexdigest 포맷
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.HexFormat;
 
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +52,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.Set;
+import java.util.List;
 
 
 // 이 클래스는 서비스(비즈니스 로직) 역할이니까 스프링이 빈으로 등록해서 DI 하도록 하라는 표시
@@ -63,31 +70,36 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AccountsService implements AccountsUseCase {
 
-    // 타입이 UserRepository 인터페이스인 인스턴스 변수 '정의'
-    // 유저 아웃바운드 포트 인스턴스 변수 
+    // 1. 유저 아웃바운드 포트 인스턴스 변수
+    // 타입이 UserRepository 인터페이스인 인스턴스 변수 '정의' 
     // 최종 저장되는 값: userRepository = UserRepositoryJpaAdapter 객체 
     private final UserRepository userRepository;   
     
-    // 유저 레벨 아웃바운드 포트 인스턴스 변수 
+    // 2. 유저 레벨 아웃바운드 포트 인스턴스 변수
+    // UserLevelRepository: 인터페이스 
     // 최종 저장되는 값: userLevelRepository = UserLevelRepositoryJpaAdapter 객체
     private final UserLevelRepository userLevelRepository;
 
-    // 로그인 로그 아웃바운드 포트 인스턴스 변수
+    // 3. 로그인 로그 아웃바운드 포트 인스턴스 변수
+    // LoginLogRepository: 인터페이스
     // 최종 저장되는 값: loginLogRepository = LoginLogRepositoryJpaAdapter 객체
     private final LoginLogRepository loginLogRepository;
     
-    // 토큰 발급을 위한 아웃바운드 포트 인스턴스 변수
-    // 최종 저장되는 값: jwtIssuer = JwtIssuerJoseAdapter 객체
+    // 4. 토큰 발급을 위한 아웃바운드 포트 인스턴스 변수
+    // JwtIssuer: 인터페이스
+    // 최종 저장되는 값: jwtIssuer = JwtIssuerImpl 객체
     private final JwtIssuer jwtIssuer;  
 
-    // 비밀번호 해시 생성과 검증 담당 인스턴스 변수
+    // 5. 비밀번호 해시 생성과 검증 담당 인스턴스 변수
     // PasswordEncoder: 인터페이스
+    // BCryptPasswordEncoder: 스프링 시큐리티(외부 라이브러리)에서 제공하는 클래스
     // 최종 저장되는 값: passwordEncoder = BCryptPasswordEncoder 객체
     private final PasswordEncoder passwordEncoder; 
 
-    // 현재 시각을 외부에서 넣어주는 역할의 인스턴스 변수
+    // 6. 현재 시각을 외부에서 넣어주는 역할의 인스턴스 변수
     // Clock: 추상 클래스 -> "구현된 클래스"가 아니라서 구현되지 않은 메서드들을 갖고있는 "추상 클래스" 또한 new 키워드로 인스턴스 생성 불가
-    // 최종 저장되는 값: clock = SystemClock(Asia/Seoul)
+    // SystemClock: JDK 표준 라이브러리에서 제공하는 클래스
+    // 최종 저장되는 값: clock = SystemClock 객체
     private final Clock clock;    
     
     // <인스턴스 != 인스턴스 변수>
@@ -116,32 +128,35 @@ public class AccountsService implements AccountsUseCase {
     //    this.clock = clock; 
     // }
 
-    // 사전중복검사(precheck) 토큰 서명용 비밀키 인스턴스 변수
+    // 7. 사전중복검사(precheck) 토큰 서명용 비밀키 인스턴스 변수
     // @Value: 값 주입 어노테이션 -> 생성자로 안 받아도, 세터 안 만들어도, 어노테이션만 붙이면 컨테이너가 알아서 넣어줌
-    // ${ ... }: 프로퍼티(placeholders) 읽기 문법 -> 스프링이 알아서 app.precheck.secret에 해당하는 환경변수 값을 찾아서 필드에 넣어줌
+    // ${ ... }: 프로퍼티(placeholders) 읽기 문법 -> 스프링이 알아서 application.yml에서 app.precheck.secret에 해당하는 환경변수 값을 찾아서 필드에 넣어줌
     // 최종 저장되는 값: precheckSecret = "s3cr3t_precheck_key_abc123"
     @Value("${app.precheck.secret}")
     private String precheckSecret;
 
-    // 프리체크 토큰 TTL(초) 인스턴스 변수
+    // 8. 프리체크 토큰 TTL(초) 인스턴스 변수
+    // 설정 소스는 application.yml의 app.precheck.ttl-seconds이고, 값이 없으면 콜론 뒤 기본값 600을 사용
     // 최종 저장되는 값: precheckTtlSec = 600
     @Value("${app.precheck.ttl-seconds:600}")
     private int precheckTtlSec;
 
-    // 아이디 정규식 클래스 상수
-    // 최종 저장되는 값: USER_ID_PATTERN = Pattern("^[a-z0-9]{5,20}$")
+    // 9. 아이디 정규식 클래스 상수
+    // Pattern: JDK 표준 라이브러리 클래스
+    // 최종 저장되는 값: USER_ID_PATTERN = Pattern 객체
+    // Pattern 객체는 pattern, flags, compiled, normalizedPattern, ... 와 같은 인스턴스 변수들로 구성되어 있다.
     private static final Pattern USER_ID_PATTERN = Pattern.compile("^[a-z0-9]{5,20}$");
 
-    // "naver.com" 등의 문자열을 담는 인스턴스 변수
-    // allowedEmailDomainsProp에 "naver.com,gmail.com,..." 형태의 콤마로 구분한 문자열이 주입된다.
+    // 10. "gmail.com,naver.com,kakao.com" 문자열을 담는 인스턴스 변수
     // 설정 소스는 application.yml의 app.allowed-email-domains이고, 없으면 콜론 뒤 기본값(gmail.com,naver.com,kakao.com)을 사용
-    // 최종 저장되는 값: allowedEmailDomainsProp = "gmail.com,naver.com,kakao.com"
+    // 최종 저장되는 값: allowedEmailDomainsProp = "gmail.com,naver.com,kakao.com" -> 확정적으로 이 문자열이 변수에 담김
     @Value("${app.allowed-email-domains:gmail.com,naver.com,kakao.com}")
     private String allowedEmailDomainsProp;  
 
-    // 위 문자열을 파싱해서 만든 허용 도메인 집합을 담는 인스턴스 변수
-    // Set<String>: 문자열(String)만 담는 중복 없는 컬렉션. 자바의 제네릭 컬렉션 Set<E>에 E=String을 넣은 타입
-    // 최종적으로 ["gmail.com", "naver.com", "kakao.com"] 이런식으로 저장됨. 순서는 의미 없음
+    // 11. 위 문자열을 파싱해서 만든 허용 도메인 집합을 담는 인스턴스 변수
+    // Set<String>: Set 자료형에 반드시 String만 담으라는 표시
+    // 제네릭: 타입(자료형)을 강제하기 위한 장치
+    // 최종적으로 {"gmail.com", "naver.com", "kakao.com"} 이런식으로 저장됨. Set이므로 순서는 의미 없음
     // 파이썬에서의 set 자료형과 유사
     // 최종 저장되는 값: allowedEmailDomains = {"gmail.com", "naver.com", "kakao.com"}
     private Set<String> allowedEmailDomains;
@@ -149,7 +164,7 @@ public class AccountsService implements AccountsUseCase {
     // @PostConstruct : 스프링이 @Service 빈을 생성하고 @Value 주입까지 끝낸 직후 밑의 ensureSecrets() 함수가 한 번만 호출되도록 하는 어노테이션
     @PostConstruct
 
-    // 앱 시작 직후 필수 설정이 제대로 들어왔는지 점검하고(없으면 바로 부팅 실패),
+    // 12. 앱 시작 직후 필수 설정이 제대로 들어왔는지 점검하고(없으면 바로 부팅 실패),
     // 허용 이메일 도메인 문자열을 파싱해 Set 자료형으로 저장해 두는 함수
     void ensureSecrets() {
 
@@ -177,21 +192,30 @@ public class AccountsService implements AccountsUseCase {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    // 여기서부턴 AccountsUseCase 인터페이스에서 시그니처로 선언한 함수들의 로직을 실제로 구현하는 부분이다.
     // ─────────────────────────────────────────────────────────
-    // 1) 회원가입: 아이디 사전 중복검사
+    // 1) precheckUserId: 회원가입 - 아이디 사전 중복검사 함수 구현
     // ─────────────────────────────────────────────────────────
 
     // AccountsUseCase 인터페이스에서 시그니처로 선언된 함수 오버라이딩
     @Override
 
-    // 조회만 하므로 DB에 쓰기는 없다는 읽기 전용 어노테이션 (성능 최적화 용도)
+    // 조회만 하므로 DB에 쓰기는 없다고 알리는 읽기 전용 어노테이션 (성능 최적화 용도)
     @Transactional(readOnly = true) 
     public IdPrecheckResult precheckUserId(String userId) {
+
+        // java.util.Objects의 메서드로 null이면 즉시 NullPointerException을 던진다.
+        Objects.requireNonNull(userId, "userId");
+
+        // 아이디의 앞뒤 공백을 제거
+        userId = userId.trim();
 
         // 헬퍼함수: 필수 입력값(아이디/이메일/비번 등)이 null이거나 공백만 있으면 즉시 예외 던짐
         ensureNotBlank(userId, "userId");
 
-        // 장고 RegexField와 동일한 형식 검증
+        // 아이디가 소문자+숫자 5~20자 형식인지 검사하고, 아니면 예외 던진다.
+        // 서비스 코드에 존재하는 메시지들은 백엔드 개발/디버깅(ex: Postman)할때 더 용이하게 개발하기위한 목적으로 작성한 것이고,
+        // 실제 사용자에게 보여주기 위한 메시지는 프론트에서 작성한다.
         if (!USER_ID_PATTERN.matcher(userId).matches()) {
             throw new IllegalArgumentException("아이디는 영문 소문자와 숫자만 사용 가능하며 5~20자여야 합니다.");
         }
@@ -205,186 +229,228 @@ public class AccountsService implements AccountsUseCase {
         
         // 장고처럼 "서명된" 프리체크 토큰 발급 (JWT 아님)
         String token = signPrecheckToken("user_id", userId);
-        int ttlSec = precheckTtlSec;   // 600초
 
-        // 유즈케이스 인터페이스 안에 정의해둔 record DTO 클래스를 생성해서 리턴 
-        // 클라이언트는 idCheckToken과 expiresInSeconds를 받아 "사전검증을 통과한 상태"를 잠시 증명할 수 있음.
-        return new IdPrecheckResult(token, ttlSec);
+        // 유즈케이스 인터페이스 안에서 구현해둔 IdPrecheckResult record 클래스의 인스턴스를 생성해서 리턴 
+        // 클라이언트는 idCheckToken과 expiresInSeconds를 받아 "사전검증을 통과한 상태"를 잠시(600초) 증명할 수 있음.
+        return new IdPrecheckResult(token, precheckTtlSec);
     }
 
     // ─────────────────────────────────────────────────────────
-    // 2) 회원가입: 이메일 사전 중복검사
+    // 2) precheckEmail: 회원가입 - 이메일 사전 중복검사 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     @Transactional(readOnly = true)
     public EmailPrecheckResult precheckEmail(String email) {
+        Objects.requireNonNull(email, "email");
+        email = email.trim(); 
         ensureNotBlank(email, "email");
 
-        // 허용 도메인 검사 (장고 EmailPrecheckRequestSerializer와 동일)
-        String domain = email.substring(email.indexOf('@') + 1).toLowerCase();
+        // 이메일 형식 검사
+        int at = email.indexOf('@');
+        if (at <= 0 || at == email.length() - 1) {
+            throw new IllegalArgumentException("이메일 형식이 올바르지 않습니다.");
+        }
+
+        // 허용 도메인 검사
+        String domain = email.substring(at + 1).toLowerCase();
         if (!allowedEmailDomains.contains(domain)) {
             String joined = String.join(", ", allowedEmailDomains);
             throw new IllegalArgumentException("허용되지 않은 도메인입니다. (" + joined + " 만 사용가능합니다.)");
         }
 
+        // 중복 이메일 검사
         if (userRepository.existsByEmail(email)) {
             throw new IllegalStateException("이미 사용 중인 이메일입니다.");
         }
-        // 장고와 동일 컨벤션으로 "서명된" 토큰 발급
+
         String token = signPrecheckToken("email", email);
-        int ttlSec = precheckTtlSec; // 10분
-        return new EmailPrecheckResult(token, ttlSec);
+
+        return new EmailPrecheckResult(token, precheckTtlSec); 
     }
 
     // ─────────────────────────────────────────────────────────
-    // 3) 회원가입
+    // 3) signUp: 회원가입 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public Integer signUp(SignUpCommand cmd) {
 
-        // 입력값 검증
-        Objects.requireNonNull(cmd, "cmd");    // cmd 자체가 null이면 즉시 예외 발생.
-        ensureNotBlank(cmd.userId(), "userId");  // userId가 비었거나 공백이면 예외.
-        ensureNotBlank(cmd.email(), "email");    // email이 비었거나 공백이면 예외.
-        ensureNotBlank(cmd.rawPassword(), "rawPassword");  // rawPassword가 비었거나 공백이면 예외.
-        ensureNotBlank(cmd.username(), "username");        // username이 비었거나 공백이면 예외.
-        LocalDate birth = Objects.requireNonNull(cmd.birthDate(), "birthDate"); // birthDate가 null이면 예외, 아니면 지역 변수 birth에 저장.
+        // 0) 회원가입 시 입력하는 사용자 정보들에 대한 null, 공백 기본 검증
 
-        // 약관 동의 필수(장고 validate_agree_whether 반영)
-        //  - SignUpCommand에 agreeWhether()가 있어야 합니다.
+        // cmd 객체 자체가 null이면 즉시 NullPointerException을 던진다.
+        Objects.requireNonNull(cmd, "cmd");
+
+        // 여기서 cmd.userId(), cmd.email(), ... 등은 record 클래스를 정의함으로써 자동으로 생성된 접근자 메서드를 사용한 것이다.
+        // 이러한 접근자 메서드를 통해 예를들어 cmd.userId()에서 userId의 값만 안전하게 읽는다.
+        ensureNotBlank(cmd.userId(), "userId");
+        ensureNotBlank(cmd.email(), "email");
+        ensureNotBlank(cmd.rawPassword(), "rawPassword");
+        ensureNotBlank(cmd.passwordConfirm(), "passwordConfirm");
+        ensureNotBlank(cmd.gender(), "gender");
+        ensureNotBlank(cmd.username(), "username");
+
+        // birth는 검증된 값을 밑에서 계속 사용하기 위해 별도의 변수로 생성함
+        LocalDate birth = Objects.requireNonNull(cmd.birthDate(), "birthDate");
+
+        // 1) 약관 동의
         if (!Boolean.TRUE.equals(cmd.agreeWhether())) {
             throw new IllegalArgumentException("약관/정책 동의가 필요합니다.");
         }
 
-        // 생년월일 정책(오늘 이후 불가/만 14세 미만 불가/비현실 연령 차단)
+        // 2) 생년월일 정책 (헬퍼 함수)
         validateBirthDatePolicy(birth);
 
-        // 아이디 형식 재검증(백엔드 일관성)
-        if (!USER_ID_PATTERN.matcher(cmd.userId()).matches()) {
+        // 3) 입력 정규화 (공백 제거)
+        final String userIdRaw = cmd.userId();
+        final String emailRaw = cmd.email();
+        final String usernameRaw = cmd.username();
+
+        final String userId = userIdRaw.trim();
+        final String email  = emailRaw.trim();
+        final String username = usernameRaw.trim();
+
+        // 4) 아이디 형식(소문자+숫자 5~20자)
+        if (!USER_ID_PATTERN.matcher(userId).matches()) {
             throw new IllegalArgumentException("아이디는 영문 소문자와 숫자만 사용 가능하며 5~20자여야 합니다.");
         }
 
-        // 중복 체크
-        if (userRepository.existsByUserId(cmd.userId())) {  // 같은 userId가 이미 존재하는지 확인 시작.
+        // 5) 이름 형식(한글/영문 + 공백 허용, 2~20자)
+        final java.util.regex.Pattern USERNAME_PATTERN =
+                java.util.regex.Pattern.compile("^(?=.{2,20}$)[가-힣a-zA-Z]+(?: [가-힣a-zA-Z]+)*$");
+        if (!USERNAME_PATTERN.matcher(username).matches()) {
+            throw new IllegalArgumentException("이름은 2~20자 한글/영문과 공백만 사용할 수 있습니다.");
+        }
+
+        // 6) 아이디/이메일 중복 체크
+        if (userRepository.existsByUserId(userId)) {
             throw new IllegalStateException("이미 사용 중인 아이디입니다.");
         }
-        if (userRepository.existsByEmail(cmd.email())) {
+        if (userRepository.existsByEmail(email)) {
             throw new IllegalStateException("이미 사용 중인 이메일입니다.");
         }
 
-        // 사전중복검사 토큰 필수 & 검증(장고 Register.validate 반영)
-        //  - SignUpCommand에 idCheckToken()/emailCheckToken() 추가되어 있어야 합니다.
+        // 7) 프리체크 토큰 검증 (정규화 값으로 우선 검증, 실패 시 raw로 한 번 더 시도)
         String idToken = Objects.requireNonNull(cmd.idCheckToken(), "idCheckToken");
         String emailToken = Objects.requireNonNull(cmd.emailCheckToken(), "emailCheckToken");
-        if (!verifyPrecheckToken(idToken, "user_id", cmd.userId(), precheckTtlSec)) {
+
+        boolean idOk = verifyPrecheckToken(idToken, "user_id", userId, precheckTtlSec)
+                    || verifyPrecheckToken(idToken, "user_id", userIdRaw, precheckTtlSec);
+        if (!idOk) {
             throw new IllegalArgumentException("아이디 중복검사 토큰이 유효하지 않거나 만료되었습니다.");
         }
-        if (!verifyPrecheckToken(emailToken, "email", cmd.email(), precheckTtlSec)) {
+
+        boolean emailOk = verifyPrecheckToken(emailToken, "email", email, precheckTtlSec)
+                        || verifyPrecheckToken(emailToken, "email", emailRaw, precheckTtlSec);
+        if (!emailOk) {
             throw new IllegalArgumentException("이메일 중복검사 토큰이 유효하지 않거나 만료되었습니다.");
         }
 
-        // 비밀번호 정책 검사 (대문/소문/숫자/특수문자 중 3종 이상, 연속숫자 4자, 동일문자 4회 금지, 아이디 3자 이상 연속 불가)
-        String pwError = passwordPolicyError(cmd.rawPassword(), cmd.userId());
+        // 8) 비밀번호 정책
+        String pwError = passwordPolicyError(cmd.rawPassword(), userId);
         if (pwError != null) {
             throw new IllegalArgumentException(pwError);
         }
 
-        // 신규 가입은 항상 USER(코드 0) 로 시작.
-        // JPA EntityManager 대신 등급 포트로 로드
+        // 9) 비밀번호 확인 검증
+        if (!cmd.rawPassword().equals(cmd.passwordConfirm())) {
+            throw new IllegalArgumentException("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+        }
+
+        // 10) 기본 등급 USER(0)
         UserLevel levelUser = userLevelRepository.findByCode((byte) 0)
                 .orElseThrow(() -> new IllegalStateException("USER(0) 등급이 없습니다."));
-        
-        // User 엔티티 생성 (빌더 패턴) -> DB에 들어갈 사용자 한 건을 메모리에서 완성.
+
+        // 11) 사용자 엔티티 생성
         User user = User.builder()
                 .level(levelUser)
-                .email(cmd.email())
-                .userId(cmd.userId())
-                .userName(cmd.username())
+                .email(email)
+                .userId(userId)
+                .userName(username)
                 .passwordHash(passwordEncoder.encode(cmd.rawPassword()))
                 .gender(parseGender(cmd.gender()))
                 .birthDate(birth)
                 .joinedAt(LocalDateTime.now(clock))
                 .build();
 
-        User saved = userRepository.save(user);
-        return saved.getUserSeq();
+        // 12) 저장 (경쟁 상황 방어)
+        try {
+            User saved = userRepository.save(user);
+            return saved.getUserSeq();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new IllegalStateException("중복 데이터로 인해 생성에 실패했습니다. 다시 시도해주세요.", e);
+        }
     }
 
     // ─────────────────────────────────────────────────────────
-    // 4) 로그인
+    // 4) login: 로그인 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
-    // updateLastLoginAt로 쓰기가 발생하므로 readOnly 제거
     public LoginResult login(String userId, String rawPassword) {
+        // 기존 인터페이스 시그니처 보존: IP/UA 없이 호출
+        return login(userId, rawPassword, null, null);
+    }
 
-        // null/""/공백이면 즉시 예외.
-        ensureNotBlank(userId, "userId");
-        ensureNotBlank(rawPassword, "rawPassword");
+    // 컨트롤러에서 IP/UA를 전달하고 싶을 때 사용할 오버로드(선택)
+    public LoginResult login(String userId, String rawPassword, String ipAddress, String userAgent) {
+        // 1) 입력 정규화(trim) + 필수값 검증
+        String uid = (userId == null) ? null : userId.trim();
+        String pw  = (rawPassword == null) ? null : rawPassword.trim();
+        ensureNotBlank(uid, "userId");
+        ensureNotBlank(pw, "rawPassword");
 
-        // 로깅 시각 미리 확보
         LocalDateTime now = LocalDateTime.now(clock);
+        String ip = (ipAddress == null) ? "" : ipAddress;
+        String ua = (userAgent == null) ? "" : userAgent;
 
-        // userId로 단건 조회.
-        // 없으면 같은 메시지로 실패 -> "아이디 존재 여부"를 노출하지 않음(보안).
-        java.util.Optional<User> userOpt = userRepository.findByUserId(userId);
+        // 2) 사용자 조회 (아이디 존재 노출 방지: 동일 메시지 사용)
+        var userOpt = userRepository.findByUserId(uid);
         if (userOpt.isEmpty()) {
-            // 존재하지 않는 아이디로 실패 로깅(user 없음)
             loginLogRepository.append(LoginLog.builder()
-                        .user(null)                // 사용자 엔티티 없음
-                        .inputId(userId)
-                        .attemptedAt(now)
-                        .success(false)
-                        .ipAddress(null)           // TODO: 컨트롤러에서 전달받아 세팅
-                        .userAgent(null)           // TODO: 컨트롤러에서 전달받아 세팅
-                        // 입력 비밀번호는 원문 저장 금지 -> 서버 비밀키로 salt 후 sha256 hexdigest
-                        .inputPasswordHash(hashForLog(rawPassword))
-                        .build());
-            throw new IllegalArgumentException("아이디 또는 비밀번호가 일치하지 않습니다.");
+                    .user(null)
+                    .inputId(uid)
+                    .attemptedAt(now)
+                    .success(false)
+                    .ipAddress(ip)
+                    .userAgent(ua)
+                    .inputPasswordHash(hashForLog(pw))
+                    .build());
+            throw new BadCredentialsException("아이디 또는 비밀번호가 일치하지 않습니다.");
         }
 
         User user = userOpt.get();
 
-        // 평문 비번 vs 저장된 해시 비교
-        // 불일치 시 같은 메시지로 실패(계정 유추 방지).
-        if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            // 비밀번호 불일치 실패 로깅
+        // 3) 비밀번호 검증 (불일치 시 동일 메시지)
+        if (!passwordEncoder.matches(pw, user.getPasswordHash())) {
             loginLogRepository.append(LoginLog.builder()
-                        .user(user)
-                        .inputId(userId)
-                        .attemptedAt(now)
-                        .success(false)  
-                        .ipAddress(null)         // TODO: 컨트롤러에서 전달
-                        .userAgent(null)         // TODO: 컨트롤러에서 전달
-                        .inputPasswordHash(hashForLog(rawPassword))
-                        .build());
-            throw new IllegalArgumentException("아이디 또는 비밀번호가 일치하지 않습니다.");
+                    .user(user)
+                    .inputId(uid)
+                    .attemptedAt(now)
+                    .success(false)
+                    .ipAddress(ip)
+                    .userAgent(ua)
+                    .inputPasswordHash(hashForLog(pw))
+                    .build());
+            throw new BadCredentialsException("아이디 또는 비밀번호가 일치하지 않습니다.");
         }
 
-        // 마지막 로그인 시각 갱신 (부분 업데이트 포트)
-        // 전체 엔티티 로딩 없이 UPDATE만 수행하는 최적화 포트.
+        // 4) 마지막 로그인 시각 갱신(부분 업데이트)
         userRepository.updateLastLoginAt(user.getUserSeq(), now);
 
-        // 성공 로깅
+        // 5) 성공 로그
         loginLogRepository.append(LoginLog.builder()
-                    .user(user)
-                    .inputId(userId)
-                    .attemptedAt(now)
-                    .success(true)
-                    .ipAddress(null)         // TODO: 컨트롤러에서 전달
-                    .userAgent(null)         // TODO: 컨트롤러에서 전달
-                    .inputPasswordHash("")   // 성공 시 비번 저장 불필요
-                    .build());
+                .user(user)
+                .inputId(uid)
+                .attemptedAt(now)
+                .success(true)
+                .ipAddress(ip)
+                .userAgent(ua)
+                .inputPasswordHash("")   // 성공 시 평문 비번 해시 저장 불필요
+                .build());
 
-        // 등급 코드(0/1/2) -> USER/ADMIN/SUPER_ADMIN 문자열로 변환.
+        // 6) 역할 매핑 및 토큰 발급
         String role = mapRole(user);
-
-        // JwtIssuer 빈이 있으면 액세스/리프레시 발급.
-        // 없으면 빈 문자열 -> 컨트롤러나 다른 계층에서 발급/쿠키세팅 가능.
-        String access = jwtIssuer.issueAccessToken(user);
+        String access  = jwtIssuer.issueAccessToken(user);
         String refresh = jwtIssuer.issueRefreshToken(user);
 
-        // 로그인 결과 합성
-        // 클라이언트가 바로 쓸 수 있는 형태로 프로필+역할+토큰을 패키징.
         return new LoginResult(
                 user.getUserSeq(),
                 user.getUserId(),
@@ -395,76 +461,290 @@ public class AccountsService implements AccountsUseCase {
                 refresh
         );
     }
+    
+    // ─────────────────────────────────────────────────────────
+    // 5) findUserId: 아이디 찾기 함수 구현
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional(readOnly = true)
+    public FindIdResult findUserId(FindIdCommand cmd) {
+        Objects.requireNonNull(cmd, "cmd");
+        ensureNotBlank(cmd.email(), "email");
+        ensureNotBlank(cmd.userName(), "userName");
+
+        // 입력 정규화(앞뒤 공백 제거)
+        String email = cmd.email().trim();
+        String name  = cmd.userName().trim();
+
+        // 1) email로 사용자 조회 (장고: filter(email=..., user_name=...)와 동일 목적)
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new NotFoundException("가입되지 않은 사용자입니다."));
+
+        // 2) 이름 일치 검증 (대/소문자 구분 동일 비교)
+        if (!name.equals(user.getUserName())) {
+            throw new NotFoundException("가입되지 않은 사용자입니다.");
+        }
+
+        // 3) 성공 시 user_id 반환
+        return new FindIdResult(user.getUserId());
+    }
 
     // ─────────────────────────────────────────────────────────
-    // 5) 관리자 승격 (USER->ADMIN)
+    // 6) findPassword: 비밀번호 찾기 함수 구현
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional
+    public FindPasswordResult findPassword(FindPasswordCommand cmd) {
+        Objects.requireNonNull(cmd, "cmd");
+        ensureNotBlank(cmd.userId(), "userId");
+        ensureNotBlank(cmd.userName(), "userName");
+        ensureNotBlank(cmd.email(), "email");
+
+        // DRF와 동일하게 앞뒤 공백 제거
+        String userId = cmd.userId().trim();
+        String name   = cmd.userName().trim();
+        String email  = cmd.email().trim();
+
+        // 1) user_id로 우선 조회 (user_id는 유니크라는 전제)
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new NotFoundException("이름/아이디/이메일이 일치하는 사용자가 없습니다."));
+
+        // 2) 이메일/이름 대소문자 무시 일치 검사 (DRF의 __iexact 동작)
+        if (isBlank(user.getEmail()) || !user.getEmail().equalsIgnoreCase(email)
+                || isBlank(user.getUserName()) || !user.getUserName().equalsIgnoreCase(name)) {
+            throw new NotFoundException("이름/아이디/이메일이 일치하는 사용자가 없습니다.");
+        }
+
+        // 3) 임시 비밀번호 생성 + 해시 저장 + 변경시각 업데이트
+        String tempPassword = generateTempPassword(10);
+        user.setPasswordHash(passwordEncoder.encode(tempPassword));
+        user.setPasswordChangedAt(LocalDateTime.now(clock));
+        userRepository.save(user);
+
+        // 4) 서비스는 tempPassword만 리턴 (컨트롤러에서 DEBUG 여부에 따라 노출/비노출 결정)
+        return new FindPasswordResult(tempPassword);
+    }
+
+    // 헬퍼
+    private static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
+
+    private static String generateTempPassword(int length) {
+        final String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        SecureRandom rnd = new SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) sb.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
+        return sb.toString();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 7) changePassword: 비밀번호 변경 함수 구현
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional
+    public void changePassword(ChangePasswordCommand cmd) {
+        // 1) 입력값 검증
+        Objects.requireNonNull(cmd, "cmd");
+        Objects.requireNonNull(cmd.actorUserSeq(), "actorUserSeq");
+        ensureNotBlank(cmd.currentPassword(), "currentPassword");
+        ensureNotBlank(cmd.newPassword(), "newPassword");
+        ensureNotBlank(cmd.newPasswordConfirm(), "newPasswordConfirm");
+
+        // 2) 사용자 조회(인증된 사용자)
+        User user = userRepository.findById(cmd.actorUserSeq())
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("로그인이 필요합니다."));
+
+        // 3) 현재 비밀번호 확인
+        if (!passwordEncoder.matches(cmd.currentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+        }
+
+        // 4) 새 비밀번호 확인 일치
+        if (!cmd.newPassword().equals(cmd.newPasswordConfirm())) {
+            throw new IllegalArgumentException("새 비밀번호와 새 비밀번호 확인이 일치하지 않습니다.");
+        }
+
+        // 5) 새 비밀번호가 현재와 동일 금지
+        if (cmd.currentPassword().equals(cmd.newPassword())) {
+            throw new IllegalArgumentException("새 비밀번호가 현재 비밀번호와 동일할 수 없습니다.");
+        }
+
+        // 6) 회원가입과 동일한 보안 규칙 적용
+        String pwError = passwordPolicyError(cmd.newPassword(), user.getUserId());
+        if (pwError != null) {
+            // 회원가입과 동일 포맷 메시지 사용
+            throw new IllegalArgumentException(pwError);
+        }
+
+        // 7) 해시 저장 + 변경시각 갱신
+        user.setPasswordHash(passwordEncoder.encode(cmd.newPassword()));
+        // 엔티티에 필드가 있다면 갱신
+        user.setPasswordChangedAt(LocalDateTime.now(clock));
+
+        userRepository.save(user);
+
+        // 쿠키 삭제(리프레시 무효화) 등은 컨트롤러 레이어에서 처리
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 8) listUsers: 회원 관리 페이지에서 회원 목록을 조회하는 함수 구현
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional(readOnly = true)
+    public UserListResult listUsers(UserListQuery query) {
+        Objects.requireNonNull(query, "query");
+
+        // (A) 권한 체크: ADMIN(1)+
+        User actor = userRepository.findByIdWithLevel(query.actorUserSeq())
+            .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("로그인이 필요합니다."));
+        if (levelCode(actor) < 1) throw new SecurityException("관리자만 접근할 수 있습니다.");
+
+        // (B) 페이지 파라미터
+        int page = Math.max(1, query.page());
+        int size = Math.max(1, Math.min(100, query.size()));
+        int offset = (page - 1) * size;
+
+        // (C) 검색어 파싱
+        String q = safe(query.q());
+        List<String> terms = splitTerms(q);
+        Integer roleHint = extractRoleHint(terms);
+        List<String> filteredTerms = terms.stream()
+                .filter(t -> !isRoleWord(t) && !isPureRoleCode(t))
+                .toList();
+
+        // (D) 총계/행 조회
+        long total = userRepository.countBySearch(roleHint, filteredTerms);
+        List<User> rows = userRepository.findBySearch(roleHint, filteredTerms, offset, size);
+        int totalPages = (total == 0) ? 0 : (int) Math.ceil((double) total / size);
+
+        // (E) DTO 매핑
+        List<UserListItem> items = new java.util.ArrayList<>(rows.size());
+        for (User u : rows) {
+            int code = (u.getLevel() != null && u.getLevel().getGradeCode() != null)
+                    ? u.getLevel().getGradeCode()   // Short → int 자동 승격
+                    : 0;
+
+            String name = (u.getLevel() != null && u.getLevel().getGradeName() != null)
+                    ? u.getLevel().getGradeName()
+                    : defaultGradeName(code);
+
+            items.add(new UserListItem(
+                    u.getUserSeq(),
+                    safe(u.getUserId()),
+                    safe(u.getUserName()),
+                    code,
+                    name
+            ));
+        }
+
+        return new UserListResult(items, page, size, total, totalPages);
+    }
+    
+
+    // ─────────────────────────────────────────────────────────
+    // 9) promoteToAdmin: 관리자 승격 (USER->ADMIN) 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public void promoteToAdmin(Integer targetUserSeq, Integer operatorUserSeq) {
+        // 기존 void 시그니처는 내부의 결과 반환형 메서드로 위임
+        promoteToAdminReturningResult(targetUserSeq, operatorUserSeq);
+    }
 
-        // 두 값이 null이면 즉시 예외
+    @Override
+    @Transactional
+    public PromoteResult promoteToAdminReturningResult(Integer targetUserSeq, Integer operatorUserSeq) {
+        // 1) 파라미터 검증
         Objects.requireNonNull(targetUserSeq, "targetUserSeq");
         Objects.requireNonNull(operatorUserSeq, "operatorUserSeq");
 
-        // 요청자 조회 + 권한(UserLevel) 함께 로딩 -> N+1 회피용 findByIdWithLevel 사용.
-        // 코드 값이 2(SUPER_ADMIN) 인지 검사.
+        // 2) 요청자 조회 + SUPER_ADMIN(2) 권한 확인
         User operator = userRepository.findByIdWithLevel(operatorUserSeq)
-                .orElseThrow(() -> new IllegalArgumentException("요청자 정보를 찾을 수 없습니다."));
+            .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("로그인이 필요합니다."));
         int operatorCode = levelCode(operator);
-        if (operatorCode != 2) { // SUPER_ADMIN만 허용
+        if (operatorCode != 2) {
+            // 컨트롤러/Advice에서 403으로 매핑
             throw new SecurityException("권한이 없습니다.");
         }
 
-        // 현재 등급이 0(USER) 가 아니면 정책 위반 -> 승격 불가.
+        // (선택) 자기 자신 승격 금지
+        if (operator.getUserSeq().equals(targetUserSeq)) {
+            throw new IllegalArgumentException("자기 자신에게는 권한을 부여할 수 없습니다.");
+        }
+
+        // 3) 대상 조회 + 현재 등급 확인 (USER=0만 승격)
         User target = userRepository.findByIdWithLevel(targetUserSeq)
                 .orElseThrow(() -> new IllegalArgumentException("대상 사용자를 찾을 수 없습니다."));
         int targetCode = levelCode(target);
         if (targetCode != 0) {
-            throw new IllegalStateException("일반 등급(USER)만 승격할 수 있습니다.");
+            throw new IllegalArgumentException("일반 등급(USER)만 승격할 수 있습니다."); // 400
         }
 
-        // EntityManager 프록시 대신 포트로 ADMIN(1) 엔티티 로드
+        // 4) ADMIN(1) 등급 로드
         UserLevel admin = userLevelRepository.findByCode((byte) 1)
                 .orElseThrow(() -> new IllegalStateException("ADMIN(1) 등급이 없습니다."));
+
+        // 5) 승격 + 시각 설정 + 저장
+        LocalDateTime grantedAt = LocalDateTime.now(clock);
         target.setLevel(admin);
-        target.setGrantedAt(LocalDateTime.now(clock));
+        target.setGrantedAt(grantedAt);
         userRepository.save(target);
+
+        // 6) UseCase에 정의된 record로 결과 반환
+        return new PromoteResult(
+                target.getUserSeq(),
+                operator.getUserSeq(),
+                "ADMIN",
+                grantedAt
+        );
     }
 
     // ─────────────────────────────────────────────────────────
-    // 6) 일반 사용자 강등 (ADMIN->USER)
+    // 10) demoteToUser: 일반 사용자 강등 (ADMIN->USER) 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public void demoteToUser(Integer targetUserSeq, Integer operatorUserSeq) {
+        demoteToUserReturningResult(targetUserSeq, operatorUserSeq);
+    }
 
-        // 두 파라미터가 null이면 즉시 예외 -> 잘못된 호출을 초기에 차단.
+    @Override
+    @Transactional // 강등은 쓰기 작업이므로 명시
+    public DemoteResult demoteToUserReturningResult(Integer targetUserSeq, Integer operatorUserSeq) {
         Objects.requireNonNull(targetUserSeq, "targetUserSeq");
         Objects.requireNonNull(operatorUserSeq, "operatorUserSeq");
 
-        // 실행자를 권한(UserLevel)까지 함께 로딩(N+1 회피용 findByIdWithLevel).
-        // 코드가 2(SUPER_ADMIN) 인지 체크. 아니면 보안 예외로 거부.
+        // 1) 요청자 조회 + 인증 필요(401)
         User operator = userRepository.findByIdWithLevel(operatorUserSeq)
-                .orElseThrow(() -> new IllegalArgumentException("요청자 정보를 찾을 수 없습니다."));
-        int operatorCode = levelCode(operator);
-        if (operatorCode != 2) { // SUPER_ADMIN만 허용
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("로그인이 필요합니다."));
+
+        // 2) SUPER_ADMIN(2) 권한 확인(403)
+        if (levelCode(operator) != 2) {
             throw new SecurityException("권한이 없습니다.");
         }
 
-        // 대상 사용자도 권한 포함 조회.
-        // 현재 등급이 1(ADMIN) 이 아니면 정책 위반 -> 강등 불가.
+        // 3) 대상 조회(없거나 잘못된 값 → 400로 맞추려면 IllegalArgumentException 유지)
         User target = userRepository.findByIdWithLevel(targetUserSeq)
-                .orElseThrow(() -> new IllegalArgumentException("대상 사용자를 찾을 수 없습니다."));
-        int targetCode = levelCode(target);
-        if (targetCode != 1) {
-            throw new IllegalStateException("관리자 등급(ADMIN)만 강등할 수 있습니다.");
+                .orElseThrow(() -> new IllegalArgumentException("잘못된 요청입니다."));
+
+        // 4) ADMIN(1)만 강등 가능(400)
+        if (levelCode(target) != 1) {
+            throw new IllegalArgumentException("관리자 등급(ADMIN)만 강등할 수 있습니다.");
         }
 
-        // EntityManager 프록시 대신 포트로 USER(0) 엔티티 로드
+        // 5) USER(0) 등급 로드(없으면 서버 설정 오류 → 500)
         UserLevel userLevel = userLevelRepository.findByCode((byte) 0)
-                .orElseThrow(() -> new IllegalStateException("USER(0) 등급이 없습니다."));
+                .orElseThrow(() -> new RuntimeException("USER(0) 등급이 없습니다."));
+
+        // 6) 강등 처리
+        LocalDateTime demotedAt = LocalDateTime.now(clock);
         target.setLevel(userLevel);
-        target.setGrantedAt(null); // 선택: 관리자 부여시각 초기화
+        target.setGrantedAt(null); // 관리자 부여시각 초기화(정책 일치)
         userRepository.save(target);
+
+        // 7) 결과 반환
+        return new DemoteResult(
+                target.getUserSeq(),
+                operator.getUserSeq(),
+                demotedAt
+        );
     }
 
     // ─────────────────────────────────────────────────────────
@@ -656,4 +936,75 @@ public class AccountsService implements AccountsUseCase {
             return "";
         }
     }
+
+    // 15. 공백/Null 안전 문자열
+    private static String safe(String s) { return (s == null) ? "" : s.trim(); }
+
+    // 16. 공백 기준 AND 토큰화
+    private static List<String> splitTerms(String q) {
+        if (q == null || q.isBlank()) return java.util.List.of();
+        String[] parts = q.trim().split("\\s+");
+        java.util.List<String> out = new java.util.ArrayList<>(parts.length);
+        for (String p : parts) {
+            String t = p.trim();
+            if (!t.isEmpty()) out.add(t);
+        }
+        return out;
+    }
+
+    // 17. 역할 단어인지(ADMIN/SUPER/USER 한/영) 판별
+    private static boolean isRoleWord(String term) {
+        String t = term.toLowerCase();
+        return switch (t) {
+            case "admin", "administrator", "관리자",
+                "super", "superadmin", "super-admin", "super_admin", "슈퍼", "슈퍼관리자",
+                "user", "일반", "사용자" -> true;
+            default -> false;
+        };
+    }
+
+    // 18. 순수 숫자 코드(0/1/2)인지
+    private static boolean isPureRoleCode(String term) {
+        return "0".equals(term) || "1".equals(term) || "2".equals(term);
+    }
+
+    // 19. 전체 토큰에서 역할 힌트(0/1/2) 추출: 역할 단어/숫자 우선 매칭
+    private static Integer extractRoleHint(List<String> terms) {
+        Integer hint = null;
+        for (String raw : terms) {
+            String t = raw.toLowerCase();
+
+            // 숫자 코드 우선 처리
+            if (isPureRoleCode(t)) {
+                int v = Integer.parseInt(t);
+                if (v >= 0 && v <= 2) return v;
+            }
+
+            // 역할 키워드 매칭
+            switch (t) {
+                case "super", "superadmin", "super-admin", "super_admin", "슈퍼", "슈퍼관리자":
+                    return 2;
+                case "admin", "administrator", "관리자":
+                    hint = (hint == null) ? 1 : hint;
+                    break;
+                case "user", "일반", "사용자":
+                    hint = (hint == null) ? 0 : hint;
+                    break;
+                default:
+                    // ignore
+            }
+        }
+        return hint;
+    }
+
+    // 20. 등급 기본 라벨
+    private static String defaultGradeName(int code) {
+        return switch (code) {
+            case 2 -> "슈퍼관리자";
+            case 1 -> "관리자";
+            default -> "일반";
+        };
+    }
 }
+
+
