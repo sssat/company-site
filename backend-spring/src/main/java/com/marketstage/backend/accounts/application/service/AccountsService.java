@@ -57,7 +57,21 @@ import java.util.List;
 
 // 이 클래스는 서비스(비즈니스 로직) 역할이니까 스프링이 빈으로 등록해서 DI 하도록 하라는 표시
 // 이걸 씀으로써 스프링이 빈으로 등록된 클래스 인스턴스를 알아서 만들고, 재사용(싱글톤), 주입, 트랜잭션 프록시까지 전부 스스로 관리해준다.
-// @Service, @Repository, @Controller, @Component, @Bean으로 등록된 것들은 스프링 컨테이너가 생성/보관/주입(DI)까지 관리해준다.
+// 클래스 어노테이션인 @Component, @Service, @Repository, @Controller 들과, 
+// 메서드 어노테이션인 @Bean으로 등록된 것들은 스프링 컨테이너가 생성/보관/주입(DI)까지 관리해준다.
+// 스프링 입장에서 @Component, @Service, @Repository, @Controller 들은 다 "스캔해서 빈으로 등록" 하라는 의미고, 기본 동작은 거의 똑같다.
+// @Component: 가장 기본/원시적인 스테레오타입. "이 클래스는 스프링이 관리하는 빈입니다" 정도만 표현
+// => 그냥 스프링 빈
+// @Service: "이건 비즈니스 로직을 담는 서비스 계층 클래스입니다" 라는 의미적인 라벨. 스프링이 특별한 기능을 더해주는 건 거의 없음 
+// => 비즈니스 로직용 스프링 빈
+// @Repository: "이건 데이터 접근(퍼시스턴스) 계층입니다" 라는 의미. 예외 변환 같은 부가 기능이 붙을 수 있음
+// => DB/퍼시스턴스용 스프링 빈
+// @Controller: 웹 MVC 진입점(컨트롤러)임을 나타내는 어노테이션. @Component 기반이며, URL 매핑(@GetMapping 등)이 붙은 메서드를 요청 핸들러로 등록해준다.
+// => 웹 요청 처리용 스프링 빈
+// @RestController: REST API 전용 컨트롤러 어노테이션. 내부적으로 @Controller + @ResponseBody 조합이라, 메서드 반환값을 바로 HTTP 응답 바디(JSON 등)로 직렬화해준다.
+// => JSON REST API용 스프링 빈
+// 즉, @Component를 써도 동작은 같지만, 이 클래스는 비즈니스 로직(유즈케이스)을 담당하므로 
+// 레이어드 아키텍처 관점에서 "서비스 계층"임을 드러내기 위해 @Service를 사용한 것이다.
 @Service
 
 // 이 클래스의 모든 public 메서드가 기본적으로 트랜잭션 안에서 실행된다는 어노테이션
@@ -107,6 +121,22 @@ public class AccountsService implements AccountsUseCase {
     // 2. 인스턴스(객체): 그 설계도를 토대로 new 해서 만들어진 물건
     // 3. 인스턴스 변수(객체 변수): 그 물건 안에 들어있는 개별 속성들 -> 인스턴스의 소유
     // 4. 클래스 변수(정적 변수): 클래스당 1개, 모든 인스턴스가 공유 -> 클래스의 소유
+
+    // A a = new A() 
+    // new A(): 인스턴스
+    // a: 그 인스턴스를 가리키는 변수 != 인스턴스 변수
+    // 다만, a가 클래스 안에서 선언되면 인스턴스 변수이고, 메서드 안에서 선언되면 지역변수이다.
+    // public class Test {
+    //    A a = new A();     <- 여기서 a는 "인스턴스 변수"
+    //    int b;             <- 여기서 b 또한 "인스턴스 변수"
+    //
+    //    void method() {
+    //        int y = 10;         <- y는 "지역 변수"
+    //        A a = new A();      <- a는 "지역 변수"이고, new A()가 "인스턴스"
+    // }
+    // 따라서 Test라는 클래스 안에 a라는 인스턴스 변수(필드)가 존재하고, 
+    // 그 a는 A라는 인스턴스를 가리키며, A 인스턴스 안에 또 여러 인스턴스 변수(필드)들이 존재한다.
+
     // 쉽게 설명하면, 클래스: 설계도, 인스턴스: 설계도로 만든 완성품, 인스턴스 변수: 완성품 속의 각각의 속성들
     // 즉, 인스턴스 변수는 인스턴스 안에 있는 필드 하나를 뜻한다.
     // 따라서 인스턴스를 생성하면 인스턴스의 소유인 인스턴스 변수들은 인스턴스를 생성할때마다 만들어지지만, 
@@ -299,7 +329,8 @@ public class AccountsService implements AccountsUseCase {
         // 2) 생년월일 정책 (헬퍼 함수)
         validateBirthDatePolicy(birth);
 
-        // 3) 입력 정규화 (공백 제거)
+        // 3) 입력 정규화(전처리) -> 공백제거
+        // 공백 제거 후 별도의 변수에 저장
         final String userIdRaw = cmd.userId();
         final String emailRaw = cmd.email();
         final String usernameRaw = cmd.username();
@@ -308,12 +339,12 @@ public class AccountsService implements AccountsUseCase {
         final String email  = emailRaw.trim();
         final String username = usernameRaw.trim();
 
-        // 4) 아이디 형식(소문자+숫자 5~20자)
+        // 4) 아이디 형식 검사 (소문자+숫자 5~20자) 
         if (!USER_ID_PATTERN.matcher(userId).matches()) {
             throw new IllegalArgumentException("아이디는 영문 소문자와 숫자만 사용 가능하며 5~20자여야 합니다.");
         }
 
-        // 5) 이름 형식(한글/영문 + 공백 허용, 2~20자)
+        // 5) 이름 형식 검사(한글/영문 + 공백 허용, 2~20자)
         final java.util.regex.Pattern USERNAME_PATTERN =
                 java.util.regex.Pattern.compile("^(?=.{2,20}$)[가-힣a-zA-Z]+(?: [가-힣a-zA-Z]+)*$");
         if (!USERNAME_PATTERN.matcher(username).matches()) {
@@ -328,10 +359,11 @@ public class AccountsService implements AccountsUseCase {
             throw new IllegalStateException("이미 사용 중인 이메일입니다.");
         }
 
-        // 7) 프리체크 토큰 검증 (정규화 값으로 우선 검증, 실패 시 raw로 한 번 더 시도)
+        // 7) 중복체크 토큰 검증 (정규화 값으로 우선 검증, 실패 시 raw로 한 번 더 시도)
         String idToken = Objects.requireNonNull(cmd.idCheckToken(), "idCheckToken");
         String emailToken = Objects.requireNonNull(cmd.emailCheckToken(), "emailCheckToken");
 
+        // 헬퍼함수 사용
         boolean idOk = verifyPrecheckToken(idToken, "user_id", userId, precheckTtlSec)
                     || verifyPrecheckToken(idToken, "user_id", userIdRaw, precheckTtlSec);
         if (!idOk) {
@@ -344,22 +376,24 @@ public class AccountsService implements AccountsUseCase {
             throw new IllegalArgumentException("이메일 중복검사 토큰이 유효하지 않거나 만료되었습니다.");
         }
 
-        // 8) 비밀번호 정책
+        // 8) 비밀번호 정책 -> 헬퍼함수 사용
+        // cmd.rawPassword(): 접근자 함수
         String pwError = passwordPolicyError(cmd.rawPassword(), userId);
         if (pwError != null) {
             throw new IllegalArgumentException(pwError);
         }
 
         // 9) 비밀번호 확인 검증
+        // cmd.passwordConfirm(): 접근자 함수
         if (!cmd.rawPassword().equals(cmd.passwordConfirm())) {
             throw new IllegalArgumentException("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
         }
 
-        // 10) 기본 등급 USER(0)
+        // 10) 회원가입 시 기본 권한(등급)인 USER(0)을 DB에서 가져오는 코드
         UserLevel levelUser = userLevelRepository.findByCode((byte) 0)
                 .orElseThrow(() -> new IllegalStateException("USER(0) 등급이 없습니다."));
 
-        // 11) 사용자 엔티티 생성
+        // 11) 회원 가입 시 사용자가 입력한 정보를 바탕으로 User 엔티티 생성
         User user = User.builder()
                 .level(levelUser)
                 .email(email)
@@ -369,11 +403,11 @@ public class AccountsService implements AccountsUseCase {
                 .gender(parseGender(cmd.gender()))
                 .birthDate(birth)
                 .joinedAt(LocalDateTime.now(clock))
-                .build();
+                .build();    // Lombok @Builder로 최종 User 인스턴스 생성
 
         // 12) 저장 (경쟁 상황 방어)
         try {
-            User saved = userRepository.save(user);
+            User saved = userRepository.save(user);   // User 객체 한 줄이 DB에 저장된다.
             return saved.getUserSeq();
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
             throw new IllegalStateException("중복 데이터로 인해 생성에 실패했습니다. 다시 시도해주세요.", e);
@@ -620,7 +654,7 @@ public class AccountsService implements AccountsUseCase {
         List<UserListItem> items = new java.util.ArrayList<>(rows.size());
         for (User u : rows) {
             int code = (u.getLevel() != null && u.getLevel().getGradeCode() != null)
-                    ? u.getLevel().getGradeCode()   // Short → int 자동 승격
+                    ? u.getLevel().getGradeCode()   // Short -> int 자동 승격
                     : 0;
 
             String name = (u.getLevel() != null && u.getLevel().getGradeName() != null)
@@ -720,7 +754,7 @@ public class AccountsService implements AccountsUseCase {
             throw new SecurityException("권한이 없습니다.");
         }
 
-        // 3) 대상 조회(없거나 잘못된 값 → 400로 맞추려면 IllegalArgumentException 유지)
+        // 3) 대상 조회(없거나 잘못된 값 -> 400로 맞추려면 IllegalArgumentException 유지)
         User target = userRepository.findByIdWithLevel(targetUserSeq)
                 .orElseThrow(() -> new IllegalArgumentException("잘못된 요청입니다."));
 
@@ -729,7 +763,7 @@ public class AccountsService implements AccountsUseCase {
             throw new IllegalArgumentException("관리자 등급(ADMIN)만 강등할 수 있습니다.");
         }
 
-        // 5) USER(0) 등급 로드(없으면 서버 설정 오류 → 500)
+        // 5) USER(0) 등급 로드(없으면 서버 설정 오류 -> 500)
         UserLevel userLevel = userLevelRepository.findByCode((byte) 0)
                 .orElseThrow(() -> new RuntimeException("USER(0) 등급이 없습니다."));
 
@@ -748,6 +782,18 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
+    // 11) getUserBySeq: userSeq로 사용자 단건 조회 (리프레시 토큰 용)
+    // 리프레시 토큰 -> userSeq -> User -> 새 access 토큰
+    // 여기서 userSeq에 해당하는 User를 조회하기 위해 사용
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserBySeq(Integer userSeq) {
+        return userRepository.findById(userSeq)
+                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
+    }
+
+    // ─────────────────────────────────────────────────────────
     // 헬퍼함수
     // ─────────────────────────────────────────────────────────
 
@@ -758,7 +804,7 @@ public class AccountsService implements AccountsUseCase {
         }
     }
 
-    // 2. 약관/생년월일 검증
+    // 2. 생년월일 검증
     private void validateBirthDatePolicy(LocalDate birth) {
         LocalDate today = LocalDate.now(clock);
         if (birth.isAfter(today)) {
@@ -773,33 +819,33 @@ public class AccountsService implements AccountsUseCase {
         }
     }
 
-    // 3. 사용자가 보낸 문자열을 도메인 enum(User.Gender.M/F)으로 변환. null이거나 M/F 외 값이면 예외.
-    private Gender parseGender(String gender) {
-        if (gender == null) throw new IllegalArgumentException("gender");
-        String g = gender.trim().toUpperCase();
-        if ("M".equals(g)) return Gender.M;
-        if ("F".equals(g)) return Gender.F;
-        throw new IllegalArgumentException("성별은 M 또는 F 이어야 합니다.");
-    }   
+    // 3. 프리체크(precheck) 토큰이 "내가 만든 것"이고 "만료되지 않았고" "의도한 대상(kind/subject)용"인지 검증하는 헬퍼 함수
+    private boolean verifyPrecheckToken(String token, String kind, String subject, int maxAgeSec) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length != 4) return false;
 
-    // 4. UserLevel.gradeCode(0/1/2)를 권한 문자열 "USER" | "ADMIN" | "SUPER_ADMIN"로 매핑.
-    private String mapRole(User user) {
-        int code = levelCode(user);
-        return switch (code) {
-            case 2 -> "SUPER_ADMIN";
-            case 1 -> "ADMIN";
-            default -> "USER";
-        };
+            String kindPart = new String(urlDecoder(parts[0]), StandardCharsets.UTF_8);
+            String subjectPart = new String(urlDecoder(parts[1]), StandardCharsets.UTF_8);
+            long ts = Long.parseLong(parts[2]);
+            byte[] sigBytes = urlDecoder(parts[3]); // FIX: 시그니처 바이트
+
+            if (!kind.equals(kindPart)) return false;
+            if (!subject.equalsIgnoreCase(subjectPart)) return false;
+
+            long nowSec = LocalDateTime.now(clock).atZone(ZoneId.systemDefault()).toEpochSecond();
+            if (nowSec - ts > maxAgeSec) return false; // 만료
+
+            String header = parts[0] + "." + parts[1] + "." + parts[2];
+            byte[] expect = hmacSha256Raw(header, "precheck:" + kind + ":" + precheckSecret);
+
+            return MessageDigest.isEqual(sigBytes, expect);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-    // 5. user.getLevel()?.getGradeCode()를 꺼내 NPE 없이 int로 안전하게 변환(없으면 기본 0).
-    private int levelCode(User user) {
-        UserLevel lvl = user.getLevel();
-        Short code = (lvl != null ? lvl.getGradeCode() : null);
-        return (code != null) ? code.intValue() : 0;
-    }
-
-    // 6. 비밀번호 정책을 한 번에 검사 헬퍼함수
+    // 4. 비밀번호 정책을 한 번에 검사하는 헬퍼함수
     private String passwordPolicyError(String pw, String userId) {
         if (pw == null) return "비밀번호를 입력해주세요.";
         int len = pw.length();
@@ -857,40 +903,40 @@ public class AccountsService implements AccountsUseCase {
         return null;
     }
 
-    // 7. 장고 signing과 동등한 "프리체크 토큰" 발급/검증 로직 (JWT 아님)
+    // 5. 사용자가 보낸 문자열을 도메인 enum(User.Gender.M/F)으로 변환. null이거나 M/F 외 값이면 예외.
+    private Gender parseGender(String gender) {
+        if (gender == null) throw new IllegalArgumentException("gender");
+        String g = gender.trim().toUpperCase();
+        if ("M".equals(g)) return Gender.M;
+        if ("F".equals(g)) return Gender.F;
+        throw new IllegalArgumentException("성별은 M 또는 F 이어야 합니다.");
+    }   
+
+    // 6. UserLevel.gradeCode(0/1/2)를 권한 문자열 "USER" | "ADMIN" | "SUPER_ADMIN"로 매핑.
+    private String mapRole(User user) {
+        int code = levelCode(user);
+        return switch (code) {
+            case 2 -> "SUPER_ADMIN";
+            case 1 -> "ADMIN";
+            default -> "USER";
+        };
+    }
+
+    // 7. user.getLevel()?.getGradeCode()를 꺼내 NPE 없이 int로 안전하게 변환(없으면 기본 0).
+    private int levelCode(User user) {
+        UserLevel lvl = user.getLevel();
+        Short code = (lvl != null ? lvl.getGradeCode() : null);
+        return (code != null) ? code.intValue() : 0;
+    }
+
+    // 8. 장고 signing과 동등한 "프리체크 토큰" 발급/검증 로직 (JWT 아님)
     // 토큰 포맷: base64url(kind) + "." + base64url(subject) + "." + epochSec + "." + base64url(HMAC_SHA256(kind+"."+subject+"."+epochSec, secret="precheck:"+kind+":"+precheckSecret))
     private String signPrecheckToken(String kind, String subject) {
         long nowSec = LocalDateTime.now(clock).atZone(ZoneId.systemDefault()).toEpochSecond();
         String salt = "precheck:" + kind; // 장고 salt 컨벤션과 동일
         String header = b64(kind) + "." + b64(subject) + "." + nowSec;
-        String sigB64 = hmacSha256B64Url(header, salt + ":" + precheckSecret); // ★ FIX: base64url 문자열 그대로 사용
+        String sigB64 = hmacSha256B64Url(header, salt + ":" + precheckSecret); // FIX: base64url 문자열 그대로 사용
         return header + "." + sigB64;
-    }
-    
-    // 8. 프리체크(precheck) 토큰이 "내가 만든 것"이고 "만료되지 않았고" "의도한 대상(kind/subject)용"인지 검증하는 헬퍼 함수
-    private boolean verifyPrecheckToken(String token, String kind, String subject, int maxAgeSec) {
-        try {
-            String[] parts = token.split("\\.");
-            if (parts.length != 4) return false;
-
-            String kindPart = new String(urlDecoder(parts[0]), StandardCharsets.UTF_8);
-            String subjectPart = new String(urlDecoder(parts[1]), StandardCharsets.UTF_8);
-            long ts = Long.parseLong(parts[2]);
-            byte[] sigBytes = urlDecoder(parts[3]); // ★ FIX: 시그니처 바이트
-
-            if (!kind.equals(kindPart)) return false;
-            if (!subject.equalsIgnoreCase(subjectPart)) return false;
-
-            long nowSec = LocalDateTime.now(clock).atZone(ZoneId.systemDefault()).toEpochSecond();
-            if (nowSec - ts > maxAgeSec) return false; // 만료
-
-            String header = parts[0] + "." + parts[1] + "." + parts[2];
-            byte[] expect = hmacSha256Raw(header, "precheck:" + kind + ":" + precheckSecret);
-
-            return MessageDigest.isEqual(sigBytes, expect);
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     // 9. data에 대해 secret 키로 HMAC-SHA256 서명 바이트를 계산
@@ -905,7 +951,7 @@ public class AccountsService implements AccountsUseCase {
     }
     // 10. 위의 HMAC-SHA256 결과를 URL-safe Base64(무패딩) 문자열로 변환해 반환
     private static String hmacSha256B64Url(String data, String secret) {
-        return b64(hmacSha256Raw(data, secret)); // ★ FIX: new String(...) 불필요
+        return b64(hmacSha256Raw(data, secret)); // FIX: new String(...) 불필요
     }
 
     // 11. 평문 문자열 s를 URL-safe Base64(무패딩) 문자열로 인코딩
