@@ -2,9 +2,9 @@
 // Accounts 인바운드 포트(=유즈케이스)
 // 파이썬 장고로 치면 services.py의 함수들의 시그니처들만 모아놓은 파일이다.  
 // 컨트롤러(장고의 views.py에 대응)가 호출할 기능들을 메서드 시그니처로 정의만 한다.
-// 또한 서비스(AccountsService.java)/컨트롤러에서 가져다 쓸 입출력 record DTO 타입을 함께 정의한다.
-// 따라서 class가 아닌, interface로 선언함 -> 실제 시그니처의 로직 구현은 서비스가 담당 
-// 하지만 record 클래스는 이미 AccountsUseCase.java 안에서 구현까지 끝난 클래스 이므로, AccountsService.java에서는 갖다 쓰기만한다.
+// 따라서 class가 아닌, interface로 선언함 -> 실제 함수 시그니처의 로직 구현은 서비스(AccountsService.java)가 담당 
+// 이곳에서 정의한 메서드는 서비스에서 구현, 컨트롤러는 호출만 하고, record 클래스들은 서비스/컨트롤러 모두에서 공통 입출력 모델로 갖다 쓴다.
+// 하지만 record 클래스는 이미 여기서 구현까지 끝난 클래스 이므로, 갖다 쓰기만한다.
 
 package com.marketstage.backend.accounts.application.port.in;
 
@@ -210,21 +210,24 @@ public interface AccountsUseCase {
     // 7. 비밀번호 변경 메서드
     void changePassword(ChangePasswordCommand cmd);
 
-    // 8. 회원 목록 조회 메서드 
+    // 8. userSeq로 User 단건 조회 (리프레시 토큰 용)
+    User getUserBySeq(Integer userSeq);
+
+    // 9. 액세스 토큰 갱신 메서드
+    String refreshAccessToken(String refreshToken);
+
+    // 10. 회원 목록 조회 메서드 
     UserListResult listUsers(UserListQuery query);
 
-    // 9. 관리자 승격 메서드 
+    // 11. 관리자 승격 메서드 
     void promoteToAdmin(Integer targetUserSeq, Integer operatorUserSeq);
 
-    // 10. 관리자 승격 결과를 알려주는 메서드
+    // 12. 관리자 승격 결과를 알려주는 메서드
     PromoteResult promoteToAdminReturningResult(Integer targetUserSeq, Integer operatorUserSeq);
 
-    // 11. 일반 사용자 강등 메서드 
+    // 13. 일반 사용자 강등 메서드 
     void demoteToUser(Integer targetUserSeq, Integer operatorUserSeq);
 
-    // 12. 일반 사용자 강등 결과를 알려주는 메서드
+    // 14. 일반 사용자 강등 결과를 알려주는 메서드
     DemoteResult demoteToUserReturningResult(Integer targetUserSeq, Integer operatorUserSeq);
-
-    // 13. userSeq로 사용자 단건 조회 (리프레시 토큰 용)
-    User getUserBySeq(Integer userSeq);
 }
