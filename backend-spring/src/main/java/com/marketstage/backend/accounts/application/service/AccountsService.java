@@ -16,6 +16,7 @@ import com.marketstage.backend.accounts.domain.model.User.Gender; // User 클래
 // 애플리케이션 포트 임포트
 import com.marketstage.backend.accounts.application.port.in.AccountsUseCase;
 import com.marketstage.backend.accounts.application.port.out.JwtIssuer;
+import com.marketstage.backend.accounts.application.port.out.JwtVerifier;
 import com.marketstage.backend.accounts.application.port.out.UserRepository;
 import com.marketstage.backend.accounts.application.port.out.UserLevelRepository; 
 import com.marketstage.backend.accounts.application.port.out.LoginLogRepository;  // 로그인 로그 부분은 스프링이 기본 어드민 페이지를 제공하지 않아 UI가 없지만, DB에는 기록들이 찍히게 하기 위해 사용함
@@ -60,16 +61,22 @@ import java.util.List;
 // 클래스 어노테이션인 @Component, @Service, @Repository, @Controller 들과, 
 // 메서드 어노테이션인 @Bean으로 등록된 것들은 스프링 컨테이너가 생성/보관/주입(DI)까지 관리해준다.
 // 스프링 입장에서 @Component, @Service, @Repository, @Controller 들은 다 "스캔해서 빈으로 등록" 하라는 의미고, 기본 동작은 거의 똑같다.
+
 // @Component: 가장 기본/원시적인 스테레오타입. "이 클래스는 스프링이 관리하는 빈입니다" 정도만 표현
 // => 그냥 스프링 빈
+
 // @Service: "이건 비즈니스 로직을 담는 서비스 계층 클래스입니다" 라는 의미적인 라벨. 스프링이 특별한 기능을 더해주는 건 거의 없음 
 // => 비즈니스 로직용 스프링 빈
+
 // @Repository: "이건 데이터 접근(퍼시스턴스) 계층입니다" 라는 의미. 예외 변환 같은 부가 기능이 붙을 수 있음
 // => DB/퍼시스턴스용 스프링 빈
+
 // @Controller: 웹 MVC 진입점(컨트롤러)임을 나타내는 어노테이션. @Component 기반이며, URL 매핑(@GetMapping 등)이 붙은 메서드를 요청 핸들러로 등록해준다.
 // => 웹 요청 처리용 스프링 빈
+
 // @RestController: REST API 전용 컨트롤러 어노테이션. 내부적으로 @Controller + @ResponseBody 조합이라, 메서드 반환값을 바로 HTTP 응답 바디(JSON 등)로 직렬화해준다.
 // => JSON REST API용 스프링 빈
+
 // 즉, @Component를 써도 동작은 같지만, 이 클래스는 비즈니스 로직(유즈케이스)을 담당하므로 
 // 레이어드 아키텍처 관점에서 "서비스 계층"임을 드러내기 위해 @Service를 사용한 것이다.
 @Service
@@ -115,6 +122,9 @@ public class AccountsService implements AccountsUseCase {
     // SystemClock: JDK 표준 라이브러리에서 제공하는 클래스
     // 최종 저장되는 값: clock = SystemClock 객체
     private final Clock clock;    
+
+    // 7. 리프레시 토큰이 진짜인지, 만료 안 됐는지 검사해주는 역할의 인스턴스 변수
+    private final JwtVerifier jwtVerifier;
     
     // <인스턴스 != 인스턴스 변수>
     // 1. 클래스: 물건의 설계도
@@ -158,32 +168,32 @@ public class AccountsService implements AccountsUseCase {
     //    this.clock = clock; 
     // }
 
-    // 7. 사전중복검사(precheck) 토큰 서명용 비밀키 인스턴스 변수
+    // 8. 사전중복검사(precheck) 토큰 서명용 비밀키 인스턴스 변수
     // @Value: 값 주입 어노테이션 -> 생성자로 안 받아도, 세터 안 만들어도, 어노테이션만 붙이면 컨테이너가 알아서 넣어줌
     // ${ ... }: 프로퍼티(placeholders) 읽기 문법 -> 스프링이 알아서 application.yml에서 app.precheck.secret에 해당하는 환경변수 값을 찾아서 필드에 넣어줌
     // 최종 저장되는 값: precheckSecret = "s3cr3t_precheck_key_abc123"
     @Value("${app.precheck.secret}")
     private String precheckSecret;
 
-    // 8. 프리체크 토큰 TTL(초) 인스턴스 변수
+    // 9. 프리체크 토큰 TTL(초) 인스턴스 변수
     // 설정 소스는 application.yml의 app.precheck.ttl-seconds이고, 값이 없으면 콜론 뒤 기본값 600을 사용
     // 최종 저장되는 값: precheckTtlSec = 600
     @Value("${app.precheck.ttl-seconds:600}")
     private int precheckTtlSec;
 
-    // 9. 아이디 정규식 클래스 상수
+    // 10. 아이디 정규식 클래스 상수
     // Pattern: JDK 표준 라이브러리 클래스
     // 최종 저장되는 값: USER_ID_PATTERN = Pattern 객체
     // Pattern 객체는 pattern, flags, compiled, normalizedPattern, ... 와 같은 인스턴스 변수들로 구성되어 있다.
     private static final Pattern USER_ID_PATTERN = Pattern.compile("^[a-z0-9]{5,20}$");
 
-    // 10. "gmail.com,naver.com,kakao.com" 문자열을 담는 인스턴스 변수
+    // 11. "gmail.com,naver.com,kakao.com" 문자열을 담는 인스턴스 변수
     // 설정 소스는 application.yml의 app.allowed-email-domains이고, 없으면 콜론 뒤 기본값(gmail.com,naver.com,kakao.com)을 사용
     // 최종 저장되는 값: allowedEmailDomainsProp = "gmail.com,naver.com,kakao.com" -> 확정적으로 이 문자열이 변수에 담김
     @Value("${app.allowed-email-domains:gmail.com,naver.com,kakao.com}")
     private String allowedEmailDomainsProp;  
 
-    // 11. 위 문자열을 파싱해서 만든 허용 도메인 집합을 담는 인스턴스 변수
+    // 12. 위 문자열을 파싱해서 만든 허용 도메인 집합을 담는 인스턴스 변수
     // Set<String>: Set 자료형에 반드시 String만 담으라는 표시
     // 제네릭: 타입(자료형)을 강제하기 위한 장치
     // 최종적으로 {"gmail.com", "naver.com", "kakao.com"} 이런식으로 저장됨. Set이므로 순서는 의미 없음
@@ -194,7 +204,7 @@ public class AccountsService implements AccountsUseCase {
     // @PostConstruct : 스프링이 @Service 빈을 생성하고 @Value 주입까지 끝낸 직후 밑의 ensureSecrets() 함수가 한 번만 호출되도록 하는 어노테이션
     @PostConstruct
 
-    // 12. 앱 시작 직후 필수 설정이 제대로 들어왔는지 점검하고(없으면 바로 부팅 실패),
+    // 13. 앱 시작 직후 필수 설정이 제대로 들어왔는지 점검하고(없으면 바로 부팅 실패),
     // 허용 이메일 도메인 문자열을 파싱해 Set 자료형으로 저장해 두는 함수
     void ensureSecrets() {
 
@@ -224,7 +234,7 @@ public class AccountsService implements AccountsUseCase {
 
     // 여기서부턴 AccountsUseCase 인터페이스에서 시그니처로 선언한 함수들의 로직을 실제로 구현하는 부분이다.
     // ─────────────────────────────────────────────────────────
-    // 1) precheckUserId: 회원가입 - 아이디 사전 중복검사 함수 구현
+    // 1) precheckUserId: 회원가입 - 아이디 사전 중복검사 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
 
     // AccountsUseCase 인터페이스에서 시그니처로 선언된 함수 오버라이딩
@@ -266,7 +276,7 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 2) precheckEmail: 회원가입 - 이메일 사전 중복검사 함수 구현
+    // 2) precheckEmail: 회원가입 - 이메일 사전 중복검사 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     @Transactional(readOnly = true)
@@ -299,7 +309,7 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 3) signUp: 회원가입 함수 구현
+    // 3) signUp: 회원가입 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public Integer signUp(SignUpCommand cmd) {
@@ -415,7 +425,7 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 4) login: 로그인 함수 구현
+    // 4) login: 로그인 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public LoginResult login(String userId, String rawPassword) {
@@ -497,7 +507,7 @@ public class AccountsService implements AccountsUseCase {
     }
     
     // ─────────────────────────────────────────────────────────
-    // 5) findUserId: 아이디 찾기 함수 구현
+    // 5) findUserId: 아이디 찾기 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     @Transactional(readOnly = true)
@@ -524,7 +534,7 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 6) findPassword: 비밀번호 찾기 함수 구현
+    // 6) findPassword: 비밀번호 찾기 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     @Transactional
@@ -571,7 +581,7 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 7) changePassword: 비밀번호 변경 함수 구현
+    // 7) changePassword: 비밀번호 변경 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     @Transactional
@@ -620,7 +630,45 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 8) listUsers: 회원 관리 페이지에서 회원 목록을 조회하는 함수 구현
+    // 8) getUserBySeq: userSeq로 사용자 단건 조회 (리프레시 토큰 용)
+    // 리프레시 토큰 -> userSeq -> User -> 새 access 토큰
+    // 여기서 userSeq에 해당하는 User를 조회하기 위해 사용
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserBySeq(Integer userSeq) {
+        return userRepository.findById(userSeq)
+                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 9) refreshAccessToken: 액세스 토큰 갱신 메서드
+    // 리프레시 토큰 하나 받아서 -> 검증하고 -> 유저 찾고 -> 새 액세스 토큰만 문자열로 돌려줌
+    // ─────────────────────────────────────────────────────────
+    @Override
+    @Transactional(readOnly = true)
+    public String refreshAccessToken(String refreshToken) {
+        Objects.requireNonNull(refreshToken, "refreshToken");
+
+        try {
+            // 1) 리프레시 토큰 검증 + userSeq 추출
+            Integer userSeq = jwtVerifier.verifyRefreshAndGetUserSeq(refreshToken);
+
+            // 2) userSeq로 유저 조회
+            User user = userRepository.findById(userSeq)
+                    .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
+
+            // 3) 새 액세스 토큰 발급
+            return jwtIssuer.issueAccessToken(user);
+
+        } catch (NotFoundException e) {
+            // 유저가 없을 때도 컨트롤러에서 401로 처리할 수 있게 IllegalArgumentException으로 래핑
+            throw new IllegalArgumentException("user not found for this refresh token", e);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 10) listUsers: 회원 관리 페이지에서 회원 목록을 조회하는 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     @Transactional(readOnly = true)
@@ -675,7 +723,7 @@ public class AccountsService implements AccountsUseCase {
     
 
     // ─────────────────────────────────────────────────────────
-    // 9) promoteToAdmin: 관리자 승격 (USER->ADMIN) 함수 구현
+    // 11) promoteToAdmin: 관리자 승격 (USER->ADMIN) 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public void promoteToAdmin(Integer targetUserSeq, Integer operatorUserSeq) {
@@ -732,7 +780,7 @@ public class AccountsService implements AccountsUseCase {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 10) demoteToUser: 일반 사용자 강등 (ADMIN->USER) 함수 구현
+    // 12) demoteToUser: 일반 사용자 강등 (ADMIN->USER) 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
     public void demoteToUser(Integer targetUserSeq, Integer operatorUserSeq) {
@@ -779,18 +827,6 @@ public class AccountsService implements AccountsUseCase {
                 operator.getUserSeq(),
                 demotedAt
         );
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // 11) getUserBySeq: userSeq로 사용자 단건 조회 (리프레시 토큰 용)
-    // 리프레시 토큰 -> userSeq -> User -> 새 access 토큰
-    // 여기서 userSeq에 해당하는 User를 조회하기 위해 사용
-    // ─────────────────────────────────────────────────────────
-    @Override
-    @Transactional(readOnly = true)
-    public User getUserBySeq(Integer userSeq) {
-        return userRepository.findById(userSeq)
-                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
     }
 
     // ─────────────────────────────────────────────────────────
