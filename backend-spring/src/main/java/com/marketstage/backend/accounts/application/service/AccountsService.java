@@ -2,6 +2,12 @@
 // 나는 따로 분리하지않고 views.py안에 비즈니스 로직(서비스 코드)들을 전부 작성했지만, 파이썬 장고로 치면 services.py에 가장 가깝다. 
 // 서비스(AccountsService.java)는 인바운드 포트(AccountsUseCase.java)에서 시그니처로 정의만 해놓은 애들의 세부 로직을 실제 구현해서 직접 사용하고, 
 // 아웃바운드 포트(UserRepository.java, ...)에서 시그니처로 정의해놓은 애들을 구현은 하지 않고 가져다 쓰기만 한다.
+// 그리고 인터페이스에서 정의하고 클래스에서 구현한 메서드들은 클래스를 통해 호출하는 것이 아닌, 인터페이스를 통해 호출하는것이 좋다.
+// 예를들어 JwtIssuer.java, JwtVerifier.java 인터페이스에서 선언하고, JwtIssuerImpl.java, JwtVerifierImpl.java 클래스에서 구현한 함수들은
+// JwtIssuer, JwtVerifier 인터페이스를 통해 호출한다. 
+// 그래서 AccountsService.java에선 JwtIssuer, JwtVerifier 이 둘을 통해 jwt 함수들을 호출하므로, 
+// JwtIssuerImpl.java, JwtVerifierImpl.java는 임포트 하지 않았다.
+// 마찬가지로 컨트롤러에서 서비스 코드를 호출할때도, AccountsService.java를 통해 호출하는것이 아닌 AccountsUseCase.java 인터페이스를 통해 호출한다.
 
 package com.marketstage.backend.accounts.application.service;
 
@@ -312,7 +318,7 @@ public class AccountsService implements AccountsUseCase {
     // 3) signUp: 회원가입 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
     @Override
-    public Integer signUp(SignUpCommand cmd) {
+    public SignUpResult signUp(SignUpCommand cmd) {
 
         // 0) 회원가입 시 입력하는 사용자 정보들에 대한 null, 공백 기본 검증
 
@@ -332,7 +338,7 @@ public class AccountsService implements AccountsUseCase {
         LocalDate birth = Objects.requireNonNull(cmd.birthDate(), "birthDate");
 
         // 1) 약관 동의
-        if (!Boolean.TRUE.equals(cmd.agreeWhether())) {
+        if (!cmd.agreeWhether()) {
             throw new IllegalArgumentException("약관/정책 동의가 필요합니다.");
         }
 
@@ -404,6 +410,8 @@ public class AccountsService implements AccountsUseCase {
                 .orElseThrow(() -> new IllegalStateException("USER(0) 등급이 없습니다."));
 
         // 11) 회원 가입 시 사용자가 입력한 정보를 바탕으로 User 엔티티 생성
+        var now = LocalDateTime.now(clock);
+
         User user = User.builder()
                 .level(levelUser)
                 .email(email)
@@ -412,13 +420,13 @@ public class AccountsService implements AccountsUseCase {
                 .passwordHash(passwordEncoder.encode(cmd.rawPassword()))
                 .gender(parseGender(cmd.gender()))
                 .birthDate(birth)
-                .joinedAt(LocalDateTime.now(clock))
+                .joinedAt(now)
                 .build();    // Lombok @Builder로 최종 User 인스턴스 생성
 
         // 12) 저장 (경쟁 상황 방어)
         try {
             User saved = userRepository.save(user);   // User 객체 한 줄이 DB에 저장된다.
-            return saved.getUserSeq();
+            return new SignUpResult(saved.getUserSeq(), now);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
             throw new IllegalStateException("중복 데이터로 인해 생성에 실패했습니다. 다시 시도해주세요.", e);
         }
@@ -427,13 +435,9 @@ public class AccountsService implements AccountsUseCase {
     // ─────────────────────────────────────────────────────────
     // 4) login: 로그인 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
-    @Override
-    public LoginResult login(String userId, String rawPassword) {
-        // 기존 인터페이스 시그니처 보존: IP/UA 없이 호출
-        return login(userId, rawPassword, null, null);
-    }
 
     // 컨트롤러에서 IP/UA를 전달하고 싶을 때 사용할 오버로드(선택)
+    @Override
     public LoginResult login(String userId, String rawPassword, String ipAddress, String userAgent) {
         // 1) 입력 정규화(trim) + 필수값 검증
         String uid = (userId == null) ? null : userId.trim();
