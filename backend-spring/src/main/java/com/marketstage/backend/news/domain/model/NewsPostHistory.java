@@ -1,12 +1,14 @@
-// news/domain/NewsPostHistory.java
-package com.marketstage.backend.news.domain;
+// news/domain/model/NewsPostHistory.java
 
-import com.marketstage.backend.accounts.domain.User;
+package com.marketstage.backend.news.domain.model;
+
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
+import com.marketstage.backend.accounts.domain.model.User;
 
 @Getter
 @Setter
@@ -47,7 +49,6 @@ public class NewsPostHistory {
         name = "DELETED_SEQ",
         nullable = false,
         foreignKey = @ForeignKey(ConstraintMode.CONSTRAINT)
-        // 필요 시 이름 고정: @ForeignKey(name = "FK_T_NEWS_POST_HISTORY__DELETED_SEQ")
     )
     private User deletedBy;
 
@@ -61,7 +62,7 @@ public class NewsPostHistory {
     @Override
     public String toString() {
         String title = (news != null)
-            ? news.getTitle()                              // 주의: LAZY 로딩 트리거 가능
+            ? news.getTitle()                             
             : (titleSnapshot != null ? titleSnapshot : "-");
 
         String when = (deletedAt != null) ? deletedAt.format(FMT) : "null";
