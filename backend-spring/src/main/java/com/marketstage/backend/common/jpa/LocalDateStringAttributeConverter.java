@@ -1,5 +1,5 @@
 // src/main/java/com/marketstage/backend/common/jpa/LocalDateStringAttributeConverter.java
-// DB에는 "문자열 날짜"로 저장하면서, 자바 코드에서는 "LocalDate 타입"으로 편하게 쓰게 해주는 파일
+// DB에는 "문자열 날짜"로 저장하면서, 자바 코드에서는 "LocalDate 타입"으로 편하게 쓰게 해주는 파일.
 
 package com.marketstage.backend.common.jpa;
 
