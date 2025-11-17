@@ -1,5 +1,5 @@
 // accounts/application/service/AccountsService.java
-// 나는 따로 분리하지않고 views.py안에 비즈니스 로직(서비스 코드)들을 전부 작성했지만, 파이썬 장고로 치면 services.py에 가장 가깝다. 
+// 장고에서는 따로 분리하지않고 views.py안에 비즈니스 로직(서비스 코드)들을 전부 작성했지만, 파이썬 장고로 치면 services.py에 가장 가깝다. 
 // 서비스(AccountsService.java)는 인바운드 포트(AccountsUseCase.java)에서 시그니처로 정의만 해놓은 애들의 세부 로직을 실제 구현해서 직접 사용하고, 
 // 아웃바운드 포트(UserRepository.java, ...)에서 시그니처로 정의해놓은 애들을 구현은 하지 않고 가져다 쓰기만 한다.
 // 그리고 인터페이스에서 정의하고 클래스에서 구현한 메서드들은 클래스를 통해 호출하는 것이 아닌, 인터페이스를 통해 호출하는것이 좋다.
@@ -12,7 +12,7 @@
 package com.marketstage.backend.accounts.application.service;
 
 import com.marketstage.backend.common.exception.NotFoundException;
-
+import com.marketstage.backend.common.mail.MailService;
 // 도메인 엔티티 임포트
 import com.marketstage.backend.accounts.domain.model.User;
 import com.marketstage.backend.accounts.domain.model.UserLevel;
@@ -206,6 +206,9 @@ public class AccountsService implements AccountsUseCase {
     // 파이썬에서의 set 자료형과 유사
     // 최종 저장되는 값: allowedEmailDomains = {"gmail.com", "naver.com", "kakao.com"}
     private Set<String> allowedEmailDomains;
+
+    // 13. 
+    private final MailService mailService;
 
     // @PostConstruct : 스프링이 @Service 빈을 생성하고 @Value 주입까지 끝낸 직후 밑의 ensureSecrets() 함수가 한 번만 호출되도록 하는 어노테이션
     @PostConstruct
@@ -569,7 +572,32 @@ public class AccountsService implements AccountsUseCase {
         user.setPasswordChangedAt(LocalDateTime.now(clock));
         userRepository.save(user);
 
-        // 4) 서비스는 tempPassword만 리턴 (컨트롤러에서 DEBUG 여부에 따라 노출/비노출 결정)
+        // 4) 임시 비밀번호 메일 발송
+        //    - MailService.sendText(...) 사용
+        try {
+            String subject = "[Market Stage] 임시 비밀번호 안내";
+            String body = """
+                    안녕하세요, %s님.
+
+                    요청하신 임시 비밀번호는 아래와 같습니다.
+
+                    임시 비밀번호: %s
+
+                    로그인 후 반드시 [마이페이지 > 비밀번호 변경] 메뉴에서
+                    새 비밀번호로 변경해 주세요.
+
+                    감사합니다.
+                    """.formatted(user.getUserName(), tempPassword);
+
+            mailService.sendText(user.getEmail(), subject, body);
+        } catch (Exception e) {
+            // 메일 전송 실패 시 롤백을 원하면 RuntimeException 그대로 던지기
+            // (지금은 IllegalStateException 등이 위로 올라가 GlobalExceptionHandler에서 500으로 처리될 것)
+            throw e;
+        }
+
+        // 5) 서비스는 tempPassword만 리턴
+        //    컨트롤러에서 DEBUG 여부에 따라 응답 JSON에 포함/미포함 결정
         return new FindPasswordResult(tempPassword);
     }
 
@@ -584,6 +612,7 @@ public class AccountsService implements AccountsUseCase {
         return sb.toString();
     }
 
+
     // ─────────────────────────────────────────────────────────
     // 7) changePassword: 비밀번호 변경 비즈니스 로직 함수 구현
     // ─────────────────────────────────────────────────────────
@@ -592,10 +621,14 @@ public class AccountsService implements AccountsUseCase {
     public void changePassword(ChangePasswordCommand cmd) {
         // 1) 입력값 검증
         Objects.requireNonNull(cmd, "cmd");
-        Objects.requireNonNull(cmd.actorUserSeq(), "actorUserSeq");
         ensureNotBlank(cmd.currentPassword(), "currentPassword");
         ensureNotBlank(cmd.newPassword(), "newPassword");
         ensureNotBlank(cmd.newPasswordConfirm(), "newPasswordConfirm");
+
+        // 1-1) 로그인 여부 확인: actorUserSeq 없으면 로그인 안 된 상태로 간주
+        if (cmd.actorUserSeq() == null) {
+            throw new AuthenticationCredentialsNotFoundException("로그인이 필요합니다.");
+        }
 
         // 2) 사용자 조회(인증된 사용자)
         User user = userRepository.findById(cmd.actorUserSeq())
@@ -625,7 +658,6 @@ public class AccountsService implements AccountsUseCase {
 
         // 7) 해시 저장 + 변경시각 갱신
         user.setPasswordHash(passwordEncoder.encode(cmd.newPassword()));
-        // 엔티티에 필드가 있다면 갱신
         user.setPasswordChangedAt(LocalDateTime.now(clock));
 
         userRepository.save(user);
@@ -678,6 +710,7 @@ public class AccountsService implements AccountsUseCase {
     @Transactional(readOnly = true)
     public UserListResult listUsers(UserListQuery query) {
         Objects.requireNonNull(query, "query");
+        Objects.requireNonNull(query.actorUserSeq(), "actorUserSeq");
 
         // (A) 권한 체크: ADMIN(1)+
         User actor = userRepository.findByIdWithLevel(query.actorUserSeq())
