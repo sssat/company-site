@@ -1,4 +1,4 @@
-// src/lib/axios.ts
+// frontend-spring/src/lib/axios.ts
 import axios, {
   type AxiosError,
   type AxiosRequestConfig,
@@ -19,14 +19,11 @@ export interface AuthRequestConfig<D = unknown> extends InternalAxiosRequestConf
 
 /* -----------------------------------------------------------------------------
    baseURL 전략
-   - 개발: ""(상대경로) -> 브라우저 오리진(예: http://localhost:5173)으로 보내고,
-           Vite dev proxy가 /api를 백엔드로 프록시
-   - 배포: VITE_API_BASE 사용
+   - 기본: VITE_API_BASE 사용, 없으면 "/api"
+   - 개발(.env.local): VITE_API_BASE=/api 로 두고 Vite dev proxy(/api -> 백엔드) 사용
 ----------------------------------------------------------------------------- */
 const baseURL =
-  import.meta.env.DEV
-    ? "" // dev는 상대경로 강제(동일 오리진 유지)
-    : ((import.meta.env.VITE_API_BASE as string | undefined) ?? "");
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? "/api";
 
 /* -----------------------------------------------------------------------------
    Axios 인스턴스
@@ -82,16 +79,18 @@ let pendingQueue: Array<(t: string) => void> = [];
 function isAuthBypassUrl(url: string | undefined): boolean {
   if (!url) return false;
   const u = url.toLowerCase();
-  // 상대/절대 모두 커버
-  return (
-    u.endsWith("/api/auth/login/") ||
-    u.endsWith("/api/auth/refresh/") ||
-    u.endsWith("/api/auth/logout/")
+
+  // config.url 이 "/auth/login/" 형태로 들어올 수도 있고,
+  // "/api/auth/login/" 전체로 들어올 수도 있으니 둘 다 처리
+  const paths = ["/auth/login/", "/auth/refresh/", "/auth/logout/"];
+
+  return paths.some(
+    (p) => u.endsWith(p) || u.endsWith(`/api${p}`)
   );
 }
 
 // 우리 백엔드 명세에 맞춘 리프레시 호출 (/api/auth/refresh/)
-// NOTE: 인터셉터 영향/Authorization 헤더를 피하기 위해 api가 아닌 axios로 "상대경로" 직접 호출
+// NOTE: 인터셉터/Authorization 헤더를 피하기 위해 api가 아닌 axios로 "상대경로" 직접 호출
 async function refreshAccessToken(): Promise<string> {
   const res = await axios.post<{ access: string }>(
     "/api/auth/refresh/", // 반드시 상대경로(동일 오리진)로 호출

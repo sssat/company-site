@@ -1,4 +1,4 @@
-// frontend/src/api/accountsApi.ts
+// frontend-spring/src/api/accountsApi.ts
 // 인증/회원(accounts) 관련 백엔드 API 호출 모듈
 
 // [인증]
@@ -88,7 +88,7 @@ export interface FindIdResponse {
   user_id: string;
 }
 
-/** 수정: 비밀번호 찾기 요청/응답 타입 */
+/** 비밀번호 찾기 요청/응답 타입 */
 export interface FindPasswordRequest {
   user_id: string;
   name: string;
@@ -145,7 +145,7 @@ export async function login(user_id: string, password: string) {
     headers: AxiosHeaders.from({}),
   };
   const res = await http.post<LoginResponse>(
-    "/api/auth/login/",
+    "/auth/login/",
     { user_id, password },
     cfg
   );
@@ -163,7 +163,7 @@ export async function logout(): Promise<void> {
       skipAuthRefresh: true,
       headers: AxiosHeaders.from({}),
     };
-    await http.post<LogoutResponse>("/api/auth/logout/", {}, cfg);
+    await http.post<LogoutResponse>("/auth/logout/", {}, cfg);
   } finally {
     setAccessToken(null);
   }
@@ -179,7 +179,7 @@ export async function refreshAccess() {
     skipAuthRefresh: true, // 인터셉터 무한루프 방지
     headers: AxiosHeaders.from({}),
   };
-  const res = await http.post<TokenRefreshResponse>("/api/auth/refresh/", {}, cfg);
+  const res = await http.post<TokenRefreshResponse>("/auth/refresh/", {}, cfg);
   const access = res.data.access ?? "";
   if (access) setAccessToken(access);
   return access;
@@ -191,7 +191,7 @@ export async function changePassword(
   new_password: string,
   new_password_confirm: string
 ) {
-  const res = await http.post<ChangePasswordResponse>("/api/auth/change-password/", {
+  const res = await http.post<ChangePasswordResponse>("/auth/change-password/", {
     current_password,
     new_password,
     new_password_confirm,
@@ -201,32 +201,32 @@ export async function changePassword(
 
 /* ────────────── 회원가입/사전검사/찾기 ────────────── */
 export async function precheckUserId(user_id: string) {
-  const res = await http.post<IdPrecheckResponse>("/api/auth/register/precheck/user-id/", {
+  const res = await http.post<IdPrecheckResponse>("/auth/register/precheck/user-id/", {
     user_id,
   });
   return res.data;
 }
 
 export async function precheckEmail(email: string) {
-  const res = await http.post<EmailPrecheckResponse>("/api/auth/register/precheck/email/", {
+  const res = await http.post<EmailPrecheckResponse>("/auth/register/precheck/email/", {
     email,
   });
   return res.data;
 }
 
 export async function register(payload: RegisterPayload) {
-  const res = await http.post<RegisterResponse>("/api/auth/register/", payload);
+  const res = await http.post<RegisterResponse>("/auth/register/", payload);
   return res.data;
 }
 
 export async function findId(payload: FindIdRequest) {
-  const res = await http.post<FindIdResponse>("/api/auth/find-id/", payload);
+  const res = await http.post<FindIdResponse>("/auth/find-id/", payload);
   return res.data;
 }
 
-/** 수정: 이름+아이디+이메일 모두 전송 */
+/** 이름+아이디+이메일 모두 전송 */
 export async function findPassword(payload: FindPasswordRequest) {
-  const res = await http.post<FindPasswordResponse>("/api/auth/find-password/", payload);
+  const res = await http.post<FindPasswordResponse>("/auth/find-password/", payload);
   return res.data;
 }
 
@@ -236,18 +236,18 @@ export async function getUsersList(page = 1, size = 10, q?: string) {
   const params: Record<string, string | number> = { page, size };
   if (q && q.trim() !== "") params.q = q.trim();
 
-  const res = await http.get<UsersListResponse>("/api/admins/users/", {
+  const res = await http.get<UsersListResponse>("/admins/users/", {
     params,
   });
   return res.data;
 }
 
 export async function promoteToAdmin(user_seq: number) {
-  const res = await http.post<PromoteResponse>("/api/admins/promote/", { user_seq });
+  const res = await http.post<PromoteResponse>("/admins/promote/", { user_seq });
   return res.data;
 }
 
 export async function demoteFromAdmin(user_seq: number) {
-  const res = await http.post<DemoteResponse>("/api/admins/demote/", { user_seq });
+  const res = await http.post<DemoteResponse>("/admins/demote/", { user_seq });
   return res.data;
 }

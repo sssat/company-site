@@ -1,11 +1,11 @@
-// src/api/inquiriesApi.ts
+// frontend-spring/src/api/inquiriesApi.ts
 // 문의(inquiries) 관련 백엔드 API 호출 모듈
 
-// - POST   /api/inquiries/                       -> 문의 등록(공개)
-// - GET    /api/inquiries/                       -> 문의 목록(관리자)
-// - GET    /api/inquiries/{inquiry_seq}/         -> 문의 단건 조회(관리자)
-// - PUT    /api/inquiries/{inquiry_seq}/process/ -> 처리완료 전환만(되돌리기 불가, 관리자)
-// - DELETE /api/inquiries/{inquiry_seq}/         -> 영구 삭제(관리자)
+// - POST   /api/inquiries/                        -> 문의 등록(공개)
+// - GET    /api/admins/inquiries/                 -> 문의 목록(관리자)
+// - GET    /api/admins/inquiries/{inquiry_seq}/   -> 문의 단건 조회(관리자)
+// - PUT    /api/admins/inquiries/{inquiry_seq}/process/ -> 처리완료 전환만(되돌리기 불가, 관리자)
+// - DELETE /api/admins/inquiries/{inquiry_seq}/   -> 영구 삭제(관리자)
 
 import http from "../lib/axios";
 
@@ -86,7 +86,7 @@ export interface InquiryDeleteResponse {
 
 /** 문의 등록 (공개 엔드포인트) */
 export const createInquiry = async (body: InquiryCreateBody) => {
-  const { data } = await http.post<InquiryCreateResponse>("/api/inquiries/", body);
+  const { data } = await http.post<InquiryCreateResponse>("/inquiries/", body);
   return data;
 };
 
@@ -100,7 +100,7 @@ export const listInquiries = async (params: InquiryListParams = {}) => {
     order = "recent",
   } = params;
 
-  const { data } = await http.get<InquiryListResponse>("/api/inquiries/", {
+  const { data } = await http.get<InquiryListResponse>("/admins/inquiries/", {
     params: { page, size, q, status, order },
   });
   return data;
@@ -108,14 +108,14 @@ export const listInquiries = async (params: InquiryListParams = {}) => {
 
 /** 단건 조회 (관리자) */
 export const getInquiry = async (inquirySeq: number) => {
-  const { data } = await http.get<InquiryDetail>(`/api/inquiries/${inquirySeq}/`);
+  const { data } = await http.get<InquiryDetail>(`/admins/inquiries/${inquirySeq}/`);
   return data;
 };
 
 /** 처리완료 전환 (관리자) — 되돌리기 불가 정책 */
 export const completeInquiry = async (inquirySeq: number) => {
   const { data } = await http.put<InquiryProcessResponse>(
-    `/api/inquiries/${inquirySeq}/process/`,
+    `/admins/inquiries/${inquirySeq}/process/`,
     { is_processed: true }
   );
   return data;
@@ -123,6 +123,6 @@ export const completeInquiry = async (inquirySeq: number) => {
 
 /** 영구 삭제 (관리자) */
 export const deleteInquiry = async (inquirySeq: number) => {
-  const { data } = await http.delete<InquiryDeleteResponse>(`/api/inquiries/${inquirySeq}/`);
+  const { data } = await http.delete<InquiryDeleteResponse>(`/admins/inquiries/${inquirySeq}/`);
   return data;
 };

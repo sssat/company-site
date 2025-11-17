@@ -1,4 +1,4 @@
-// src/api/newsApi.ts
+// frontend-spring/src/api/newsApi.ts
 // 뉴스(News) 관련 백엔드 API 호출 모듈
 // - GET    /api/news/                      -> 뉴스 목록(공개)
 // - GET    /api/news/{news_seq}/           -> 뉴스 상세(공개)
@@ -163,7 +163,7 @@ export const listNews = async (params: NewsListParams = {}): Promise<NewsListUiR
   const { page = 1, size = 6, q = "", category = "ALL", order = "recent" } = params;
   const sort = toSortParam(order);
 
-  const { data } = await http.get<NewsListServerResponse>("/api/news/", {
+  const { data } = await http.get<NewsListServerResponse>("/news/", {
     params: { page, size, q, category, sort },
   });
 
@@ -178,7 +178,7 @@ export const listNews = async (params: NewsListParams = {}): Promise<NewsListUiR
 };
 
 export const getNewsDetail = async (newsSeq: number): Promise<NewsDetailResponse> => {
-  const { data } = await http.get<NewsDetailResponse>(`/api/news/${newsSeq}/`);
+  const { data } = await http.get<NewsDetailResponse>(`/news/${newsSeq}/`);
   return data;
 };
 
@@ -190,7 +190,7 @@ export const getNewsUploadUrl = async (
   signal?: AbortSignal
 ): Promise<PresignedResp> => {
   const { data } = await http.post<PresignedResp>(
-    "/api/admins/news/uploads/urls/",
+    "/admins/news/uploads/urls/",
     {
       kind,
       filename,
@@ -252,7 +252,7 @@ export const createNews = async (
   body: NewsCreateBody,
   signal?: AbortSignal
 ): Promise<NewsCreateResponse> => {
-  const { data } = await http.post<NewsCreateResponse>("/api/admins/news/", body, { signal });
+  const { data } = await http.post<NewsCreateResponse>("/admins/news/", body, { signal });
   return data;
 };
 
@@ -261,7 +261,7 @@ export const updateNews = async (
   body: NewsUpdateBody,
   signal?: AbortSignal
 ): Promise<NewsUpdateResponse> => {
-  const { data } = await http.put<NewsUpdateResponse>(`/api/admins/news/${newsSeq}/`, body, { signal });
+  const { data } = await http.put<NewsUpdateResponse>(`/admins/news/${newsSeq}/`, body, { signal });
   return data;
 };
 
@@ -269,6 +269,6 @@ export const deleteNews = async (
   newsSeq: number,
   signal?: AbortSignal
 ): Promise<NewsDeleteResponse> => {
-  const { data } = await http.delete<NewsDeleteResponse>(`/api/admins/news/${newsSeq}/`, { signal });
+  const { data } = await http.delete<NewsDeleteResponse>(`/admins/news/${newsSeq}/`, { signal });
   return data;
 };
