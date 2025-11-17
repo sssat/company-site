@@ -19,10 +19,10 @@ export default defineConfig({
       clientPort: 443,
     },
 
-    // 프록시로 백엔드(로컬 8000)로 연결 → 외부에선 한 개 도메인만 보임
+    // 프록시로 백엔드(로컬 8080, Spring)로 연결 → 외부에선 한 개 도메인만 보임
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: "http://127.0.0.1:8080",
         changeOrigin: true,
         secure: false,
       },

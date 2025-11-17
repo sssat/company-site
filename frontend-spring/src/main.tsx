@@ -59,7 +59,6 @@ import FindPasswordResultFailPage from "./pages/AuthPage/FindPasswordPage/FindPa
 
 // (4) 비밀번호 변경
 import ChangePasswordPage from "./pages/AuthPage/ChangePasswordPage/ChangePasswordPage";
-import ChangePasswordCompletePage from "./pages/AuthPage/ChangePasswordPage/ChangePasswordCompletePage";
 
 // 3. 관리자(Admin) 전용 페이지
 // (1) super admin 전용
@@ -130,7 +129,6 @@ const router = createBrowserRouter([
 
       // (4) 비밀번호 변경
       { path: "change-password", element: <ChangePasswordPage /> },
-      { path: "change-password/complete", element: <ChangePasswordCompletePage /> },
 
       // (5) 뉴스룸 업데이트
       { path: "media/new", element: <NewsCreatePage /> },

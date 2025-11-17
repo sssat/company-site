@@ -99,17 +99,12 @@ export default function ChangePasswordCard({
         <div className={styles.card}>
           <h1 className={styles.title}>비밀번호 변경</h1>
 
-          {/* 상단 공통 에러 */}
-          {uiErrors.general && (
-            <div className={styles.error} role="alert" style={{ marginBottom: 8 }}>
-              {uiErrors.general}
-            </div>
-          )}
-
           <form className={styles.form} onSubmit={submit} noValidate>
             {/* 현재 비밀번호 */}
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="currentPassword">현재 비밀번호</label>
+              <label className={styles.label} htmlFor="currentPassword">
+                현재 비밀번호
+              </label>
               <div className={styles.inputCol}>
                 <input
                   id="currentPassword"
@@ -130,7 +125,9 @@ export default function ChangePasswordCard({
 
             {/* 새 비밀번호 */}
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="newPassword">새 비밀번호</label>
+              <label className={styles.label} htmlFor="newPassword">
+                새 비밀번호
+              </label>
               <div className={styles.inputCol}>
                 <input
                   id="newPassword"
@@ -151,7 +148,9 @@ export default function ChangePasswordCard({
 
             {/* 새 비밀번호 확인 */}
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="confirmPassword">새 비밀번호 확인</label>
+              <label className={styles.label} htmlFor="confirmPassword">
+                새 비밀번호 확인
+              </label>
               <div className={styles.inputCol}>
                 <input
                   id="confirmPassword"
@@ -170,6 +169,17 @@ export default function ChangePasswordCard({
               </div>
             </div>
 
+            {/* 하단 공통 에러 (필드들 아래, 버튼 위) */}
+            {uiErrors.general && (
+              <div
+                className={styles.error}
+                role="alert"
+                style={{ marginTop: 4, marginBottom: 8, textAlign: "left" }}
+              >
+                {uiErrors.general}
+              </div>
+            )}
+
             <button className={styles.submit} type="submit" disabled={loading}>
               {loading ? "처리 중…" : "확인"}
             </button>
@@ -179,4 +189,3 @@ export default function ChangePasswordCard({
     </section>
   );
 }
-

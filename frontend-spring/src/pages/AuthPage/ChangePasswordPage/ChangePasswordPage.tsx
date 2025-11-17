@@ -73,7 +73,7 @@ export default function ChangePasswordPage() {
         const policyMsg = validatePassword(newPassword, confirmPassword /*, userId(optional) */);
         if (policyMsg) {
           if (policyMsg.includes("일치")) next.confirmPassword = policyMsg; // 확인 불일치
-          else next.newPassword = policyMsg;                                // 그 외 정책 위반
+          else next.newPassword = policyMsg; // 그 외 정책 위반
         }
       }
 
@@ -83,17 +83,22 @@ export default function ChangePasswordPage() {
       }
 
       try {
+        // 비밀번호 변경 API 호출
         await changePassword(currentPassword, newPassword, confirmPassword);
 
-        // 성공 후 즉시 로그아웃
+        // 성공 시에도 안내 팝업을 먼저 띄운다
+        alert("비밀번호가 변경되었습니다. 다시 로그인 해주세요.");
+
+        // 성공 후 즉시 로그아웃 + 로그인 페이지로 이동
         await logout();
         navigate("/login?pwChanged=1", { replace: true });
       } catch (error: unknown) {
-        // 서버 응답을 필드 에러로 매핑 (❌ any 사용 없음)
+        // 서버 응답을 필드 에러로 매핑
         if (axios.isAxiosError<ChangePasswordErrorResponse>(error)) {
           const status = error.response?.status ?? 0;
 
-          // 토큰 만료 등으로 401 발생 시 안내 후 재로그인 유도 (기존 동작 유지)
+          // 토큰 만료 등으로 401 발생 시: 비밀번호가 실제로 변경되었는지 여부는 서버 로직에 따라 다르지만,
+          // 기존 동작을 유지: 안내 후 재로그인 유도
           if (status === 401) {
             alert("비밀번호가 변경되었습니다. 다시 로그인 해주세요.");
             await logout();
@@ -108,16 +113,14 @@ export default function ChangePasswordPage() {
             // 대표 필드 매핑
             if (data.current_password !== undefined)
               fe.currentPassword = firstString(data.current_password) ?? "현재 비밀번호가 올바르지 않습니다.";
-            if (data.new_password !== undefined)
-              fe.newPassword = firstString(data.new_password);
+            if (data.new_password !== undefined) fe.newPassword = firstString(data.new_password);
             if (data.new_password_confirm !== undefined)
               fe.confirmPassword = firstString(data.new_password_confirm);
             if (data.new_password_confirmation !== undefined)
               fe.confirmPassword = fe.confirmPassword ?? firstString(data.new_password_confirmation);
 
             // 다른 키 케이스
-            if (!fe.newPassword && data.password !== undefined)
-              fe.newPassword = firstString(data.password);
+            if (!fe.newPassword && data.password !== undefined) fe.newPassword = firstString(data.password);
             if (!fe.confirmPassword && data.password2 !== undefined)
               fe.confirmPassword = firstString(data.password2);
 
@@ -126,7 +129,8 @@ export default function ChangePasswordPage() {
               const e = data.errors;
               fe.currentPassword = fe.currentPassword ?? firstString(e.current_password);
               fe.newPassword = fe.newPassword ?? firstString(e.new_password ?? e.password);
-              fe.confirmPassword = fe.confirmPassword ?? firstString(e.new_password_confirm ?? e.password2);
+              fe.confirmPassword =
+                fe.confirmPassword ?? firstString(e.new_password_confirm ?? e.password2);
               if (!fe.currentPassword && !fe.newPassword && !fe.confirmPassword) {
                 fe.general = firstString(e.message) ?? firstString(e.detail);
               }
@@ -167,4 +171,3 @@ export default function ChangePasswordPage() {
     </main>
   );
 }
-
