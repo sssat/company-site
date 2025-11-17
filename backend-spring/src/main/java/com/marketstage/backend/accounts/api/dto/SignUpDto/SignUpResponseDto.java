@@ -15,10 +15,7 @@ public record SignUpResponseDto(
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime joinedAt
 ) {
-    public static SignUpResponseDto from(Integer userSeq) {
-        return new SignUpResponseDto(userSeq, null);
-    }
-
+    // 가입 결과 값 두 개를 담아서 응답 DTO를 만드는 함수
     public static SignUpResponseDto of(Integer userSeq, LocalDateTime joinedAt) {
         return new SignUpResponseDto(userSeq, joinedAt);
     }

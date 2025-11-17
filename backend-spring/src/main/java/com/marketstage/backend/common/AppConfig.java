@@ -16,8 +16,9 @@ import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import com.marketstage.backend.common.security.DjangoCompatiblePasswordEncoder;
 
 /* 
 그냥 이렇게 @Bean만 붙여도 되지만, 테스트랑 설정 편의를 위해 yml 값을 읽어서 동작을 바꾸는 로직을 추가
@@ -35,10 +36,8 @@ public Clock clock() {
 public class AppConfig {
 
     @Bean
-    public PasswordEncoder passwordEncoder(
-            @Value("${app.security.password.bcrypt-strength:12}") int strength
-    ) {
-        return new BCryptPasswordEncoder(strength);
+    public PasswordEncoder passwordEncoder() {
+        return new DjangoCompatiblePasswordEncoder();
     }
 
     @Bean

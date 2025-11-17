@@ -1,4 +1,4 @@
-# serializers.py  (inquiries 전용)
+# inquiries/serializers.py  (inquiries 전용)
 # DRF 요청/응답 시리얼라이저 모음
 # 엔드포인트 가정(최신 정책 반영):
 # - POST   /api/inquiries/                         -> 문의 등록

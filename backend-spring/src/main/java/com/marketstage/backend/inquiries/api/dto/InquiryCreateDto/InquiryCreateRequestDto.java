@@ -14,8 +14,8 @@ public record InquiryCreateRequestDto(
         @JsonProperty("email")
         String email,
 
-        @JsonProperty("subject")
-        String subject,
+        @JsonProperty("title")
+        String title,
 
         @JsonProperty("message")
         String message
@@ -25,7 +25,7 @@ public record InquiryCreateRequestDto(
         return new InquiriesUseCase.CreateInquiryCommand(
                 this.name,
                 this.email,
-                this.subject,
+                this.title,
                 this.message
         );
     }

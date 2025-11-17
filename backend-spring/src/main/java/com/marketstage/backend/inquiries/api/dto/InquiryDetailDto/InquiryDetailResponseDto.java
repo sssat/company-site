@@ -14,7 +14,11 @@ public record InquiryDetailResponseDto(
 
         String name,
         String email,
-        String subject,
+
+        // Java 필드명은 title, JSON 키는 subject 로 내보냄
+        @JsonProperty("subject")
+        String title,
+        
         String message,
 
         @JsonProperty("submitted_at")
@@ -40,7 +44,7 @@ public record InquiryDetailResponseDto(
                 result.inquirySeq(),
                 result.name(),
                 result.email(),
-                result.subject(),
+                result.title(),
                 result.message(),
                 result.submittedAt(),
                 result.processed(),

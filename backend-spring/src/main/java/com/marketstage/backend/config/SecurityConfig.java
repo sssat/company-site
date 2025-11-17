@@ -2,7 +2,7 @@
 // 스프링 시큐리티 전역 설정 + CORS 설정을 Bean으로 등록
 // 장고의 config/settings.py의 MIDDLEWARE + 보안 설정(Security, CORS, CSRF 등) 부분에 해당하는 일부 설정
 
-// SecurityConfig 클래스가 위치한 패키지 경로 
+// SecurityConfig 클래스가 위치한 패키지 경로
 // 1. 하나의 .java 파일에는 public 클래스는 최대 1개만 가능
 // 2. 그 public 클래스 이름은 반드시 파일명과 같아야 함
 package com.marketstage.backend.config;
@@ -10,6 +10,10 @@ package com.marketstage.backend.config;
 // 1. 자바 표준 라이브러리
 import java.time.Duration; // 시간 길이를 표현하는 클래스
 import java.util.List;     // 여러 값을 순서대로 저장하는 인터페이스
+import java.nio.charset.StandardCharsets;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 // 2. 스프링 기본 라이브러리(빈/설정)
 // Bean(빈): 개발자가 직접 new 하지 않고, 스프링이 대신 생성하고 관리하는 객체(인스턴스)
@@ -17,21 +21,25 @@ import java.util.List;     // 여러 값을 순서대로 저장하는 인터페�
 // 따라서 메서드가 @Bean으로 어노테이션 표시 되어있으면 이 메서드의 반환값이 빈으로 등록되어 컨테이너(ApplicationContext)에 들어간다 -> 그 후 필요한 곳에 자동으로 주입되어 사용된다
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;  // 이 클래스가 스프링 설정 클래스임을 표시하는 어노테이션
+import org.springframework.beans.factory.annotation.Value;
 
 // 3. 스프링 시큐리티 라이브러리(보안)
 import org.springframework.security.config.Customizer; // 간단한 기본설정을 적용할 때 쓰는 함수형 인터페이스
 import org.springframework.security.config.annotation.web.builders.HttpSecurity; // 시큐리티 규칙을 체이닝으로 구성하는 클래스
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.web.SecurityFilterChain; // 보안 필터 체인을 정의하는 인터페이스
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
-import org.springframework.web.cors.*;
-
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 // @Configuration : 이 클래스를 스프링 설정 파일처럼 인식하게 한다 -> 내부의 @Bean 메서드들을 찾아서 실행하고, 그 리턴값을 빈(Bean) 으로 컨테이너에 등록한다
 // 원래 XML에 <bean> 태그로 적던 설정을, 자바 코드 안에서 @Configuration + @Bean으로 적음
 @Configuration
-
 // SecurityConfig: 이 보안 시스템의 전역 규칙(정책)을 설정하는 클래스
 public class SecurityConfig {
 
@@ -53,6 +61,30 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
         src.registerCorsConfiguration("/**", cfg);
         return src;
+    }
+
+    // 리소스 서버가 사용할 JwtDecoder Bean
+    // JwtIssuerImpl / JwtVerifierImpl 과 동일한 시크릿(app.jwt.secret / JWT_SECRET)을 사용해서
+    // Authorization: Bearer <access-token> 을 검증하게 만든다.
+    @Bean
+    public JwtDecoder jwtDecoder(
+            @Value("${app.jwt.secret:${JWT_SECRET:change-me}}") String jwtSecret
+    ) {
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException("app.jwt.secret 설정이 필요합니다.");
+        }
+
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) { // HS256 최소 256bit = 32byte
+            throw new IllegalStateException("app.jwt.secret must be >= 32 bytes for HS256");
+        }
+
+        SecretKey key = new SecretKeySpec(keyBytes, "HmacSHA256");
+
+        return NimbusJwtDecoder
+                .withSecretKey(key)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
     }
 
     @Bean
@@ -80,7 +112,7 @@ public class SecurityConfig {
     //         ... 설정 로직 ...
     //         return this; // 자기 자신을 다시 리턴
     //     }
-    // 
+    //
     //     public HttpSecurity csrf() {
     //         ... 설정 로직 ...
     //         return this; // 또 자기 자신을 리턴
@@ -88,16 +120,19 @@ public class SecurityConfig {
     // }
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // 장고 DRF 기본과 유사하게 API는 stateless로 운영
-            .csrf(csrf -> csrf.disable())
+            // 1) CSRF 끄기 (API 서버 스타일)
+            .csrf(AbstractHttpConfigurer::disable)
 
-            // CORS
+            // 2) CORS 설정 (위에서 만든 Bean 사용)
             .cors(Customizer.withDefaults())
 
-            // HTTP→HTTPS 강제(장고 SECURE_SSL_REDIRECT), 프록시 헤더 신뢰는 application.yml에서 처리
-            .requiresChannel(ch -> ch.anyRequest().requiresSecure())
+            // 3) 세션을 STATELESS로 운영 (JWT만으로 인증)
+            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-            // HSTS(장고 설정과 동일)
+            // 4) 리소스 서버: Authorization: Bearer <access-token> 검증
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+
+            // 5) 보안 헤더 (지금 있는 그대로 유지)
             .headers(h -> h
                 .httpStrictTransportSecurity(hsts -> hsts
                     .includeSubDomains(true)
@@ -105,24 +140,40 @@ public class SecurityConfig {
                     .maxAgeInSeconds(31536000)
                 )
                 .frameOptions(frame -> frame.deny())
-                .referrerPolicy(r -> r.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN))
+                .referrerPolicy(r -> r.policy(
+                    org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN
+                ))
             )
 
-            // 권한: 장고 기본(AllowAny)에 맞춰 공개 엔드포인트는 permitAll, 나머지는 인증
+            // 6) URL별 인가 규칙
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health/**").permitAll()
+
+                // 공개 auth 엔드포인트
                 .requestMatchers(
-                    "/actuator/health",
-                    "/api/auth/register/**",
-                    "/api/auth/login",
-                    "/api/auth/refresh",
-                    "/api/auth/logout",
-                    "/api/auth/find-id",
-                    "/api/auth/find-password"
+                        "/api/auth/register/**",
+                        "/api/auth/login/**",
+                        "/api/auth/refresh/**",
+                        "/api/auth/logout/**",
+                        "/api/auth/find-id/**",
+                        "/api/auth/find-password/**"
                 ).permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+
+                // 비번 변경은 "로그인한 사용자"만
+                .requestMatchers("/api/auth/change-password/**").authenticated()
+
+                // 문의 등록(공개)
+                .requestMatchers("/api/inquiries/").permitAll()
+
+                // 뉴스 공개는 모두 허용
+                .requestMatchers("/api/news/**").permitAll()
+
+                // 관리자 전용(뉴스/문의/계정) → 일단 authenticated()만, 권한은 서비스에서 체크
+                .requestMatchers("/api/admins/**").authenticated()
+
+                // 나머지도 기본적으로 로그인 필요
                 .anyRequest().authenticated()
-            )
-        ;
+            );
 
         return http.build();
     }

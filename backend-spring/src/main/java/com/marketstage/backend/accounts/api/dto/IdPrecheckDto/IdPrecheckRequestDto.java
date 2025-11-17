@@ -11,7 +11,13 @@
 // JSON -> 자바 객체 결과가 담기는 그릇 => 즉, 역직렬화 결과가 담기는 그릇
 // 실제 역직렬화 작업은 Jackson(ObjectMapper)이 수행 
 // 따라서 Jackson(ObjectMapper)이 JSON을 받아서 자바 객체로 역직렬화 수행해서 RequestDto 이라는 그릇(객체)에 결과를 담는다.
-// [클라이언트] ---- JSON ----> (Jackson이 역직렬화) ----> RequestDto 객체 생성
+// [클라이언트] ---- JSON ----> (Jackson이 역직렬화) ----> RequestDto 라는 자바 객체 생성
+// => 역직렬화: JSON -> RequestDto(자바 객체)
+
+// 참고로 DTO는 단순히 데이터를 담는 객체 타입일 뿐이고,
+// '역직렬화 그 자체'를 의미하는 개념은 아니다.
+// 여기서는 JSON 역직렬화의 결과를 담는 용도로 쓰지만,
+// DTO라는 개념은 유즈케이스나 다른 레이어에서도 얼마든지 재사용될 수 있다.
 
 package com.marketstage.backend.accounts.api.dto.IdPrecheckDto;
 

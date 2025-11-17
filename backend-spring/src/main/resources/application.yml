@@ -57,7 +57,7 @@ spring:
   mvc:
     locale: ko_KR
 
-  # JWT 리소스 서버 검증을 맡길 때
+  # (옵션) 리소스 서버 JWT 검증 시크릿 — 발급 시크릿과 동일한 환경변수 사용
   security:
     oauth2:
       resourceserver:
@@ -67,14 +67,12 @@ spring:
 # === 앱 커스텀 프로퍼티 ===
 app:
   cors:
-    allowed-origins:
-      - http://localhost:5173
-      - http://127.0.0.1:5173
-    allowed-origin-patterns:
-      - https://*.trycloudflare.com
+    # 쉼표로 구분된 하나의 문자열로 정의 (스프링이 자동으로 List<String>으로 파싱 가능)
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:https://*.trycloudflare.com}
     allow-credentials: true
-    allowed-methods: [ GET, POST, PUT, PATCH, DELETE, OPTIONS ]
-    allowed-headers: [ "*" ]
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
     max-age: 3600
 
   precheck:
@@ -84,21 +82,53 @@ app:
   # 이메일 허용 도메인: 쉼표 구분 문자열
   allowed-email-domains: ${APP_ALLOWED_EMAIL_DOMAINS:gmail.com,naver.com,kakao.com}
 
+  # (기존) 프론트 기본 URL — 다른 코드에서 이미 쓸 수 있어서 그대로 유지
   frontend-base-url: ${FRONTEND_BASE_URL:http://127.0.0.1:5173}
 
-  # (참고) JWT 수명: 실제 발급은 JwtIssuer 구현체 기준
+  # MailService 에서 사용하는 발신자 설정
+  mail:
+    # 비워두면 MailService 가 spring.mail.username 을 대신 사용
+    from: ${APP_MAIL_FROM:}
+
+  # MailService.sendPasswordResetEmail 에서 사용할 프론트 URL/경로
+  # (지금은 A안에서 sendText만 쓰더라도, 나중에 링크 방식으로 바꾸고 싶을 때 재사용 가능)
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://127.0.0.1:5173}
+    password-reset-path: /change-password
+
+  # === JWT 발급 설정 (JwtIssuerImpl과 키 일치) ===
   jwt:
-    access-minutes: 30
-    refresh-minutes: 60
-    user-id-claim: user_seq
+    # 발급/검증을 모두 같은 환경변수(JWT_SECRET)로 통일
+    secret: ${JWT_SECRET:change-me}
+    issuer: marketstage
+    audience: marketstage
+    # 로컬 기본값을 60분 / 7일로 잡고, env(APP_JWT_*)로 덮어쓸 수 있게
+    access-minutes: ${APP_JWT_ACCESS_MINUTES:60}        # Access 토큰 유효기간(분)
+    refresh-minutes: ${APP_JWT_REFRESH_MINUTES:10080}   # Refresh 토큰 유효기간(분, 7일)
+    user-id-claim: user_seq  # 토큰에 담을 사용자 식별자 클레임 키
+
+  # === (옵션) 보안/시간 관련 튜닝 ===
+  security:
+    password:
+      bcrypt-strength: 12    # AppConfig.passwordEncoder()와 연결(미지정 시 12)
+
+  clock:
+    zone: Asia/Seoul         # AppConfig.clock()과 연결(기본 Asia/Seoul)
+    fixed: false             # 테스트에서 true로 두면 아래 instant로 고정
+    # fixed-instant: "2025-11-01T00:00:00Z"
+
+  auth:
+    debug-expose-temp-password: ${APP_AUTH_DEBUG_EXPOSE_TEMP_PASSWORD:false}
 
 # === S3/CloudFront ===
 aws:
   region: ${AWS_REGION:ap-northeast-2}
   s3:
-    bucket: ${AWS_S3_BUCKET}
+    # 로컬/테스트 기본 버킷 이름
+    bucket: ${AWS_S3_BUCKET:company-site-media-dev}
   credentials:
     access-key: ${AWS_ACCESS_KEY_ID:}
     secret-key: ${AWS_SECRET_ACCESS_KEY:}
   cloudfront:
-    domain: ${CLOUDFRONT_DOMAIN:}
+    # 로컬/테스트 기본 도메인 (실운영에서는 ENV로 덮어씀)
+    domain: ${CLOUDFRONT_DOMAIN:localhost}

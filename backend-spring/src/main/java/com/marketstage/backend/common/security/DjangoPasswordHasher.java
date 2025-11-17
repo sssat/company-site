@@ -10,6 +10,18 @@ import java.util.Base64;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
+/**
+ * 장고 스타일 비밀번호 해시("pbkdf2_sha256$...")를 검증하기 위한 유틸 클래스.
+ *
+ * Django 기본 포맷:
+ *   pbkdf2_sha256$iterations$salt$hash
+ *
+ * - 알고리즘: PBKDF2WithHmacSHA256
+ * - hash 부분: 파생 키(바이트)를 Base64로 인코딩한 문자열
+ *
+ * 이 클래스는 스프링 쪽에서 "로그인 시 기존 장고 해시를 검증"할 때만 사용한다.
+ * 새 비밀번호를 생성할 때는 사용하지 않고, 그때는 BCrypt로만 저장하도록 한다.
+ */
 public final class DjangoPasswordHasher {
 
     private static final String DJANGO_ALGORITHM = "pbkdf2_sha256";
@@ -20,6 +32,13 @@ public final class DjangoPasswordHasher {
         // 유틸 클래스이므로 인스턴스 생성 방지
     }
 
+    /**
+     * 장고 스타일 해시 문자열과 평문 비밀번호를 비교하여 일치 여부를 반환한다.
+     *
+     * @param rawPassword   사용자가 입력한 평문 비밀번호
+     * @param djangoEncoded DB에 저장된 장고 스타일 해시 (예: pbkdf2_sha256$260000$salt$hash)
+     * @return 일치하면 true, 아니면 false
+     */
     public static boolean matches(String rawPassword, String djangoEncoded) {
         if (rawPassword == null || djangoEncoded == null) {
             return false;
@@ -67,6 +86,9 @@ public final class DjangoPasswordHasher {
         }
     }
 
+    /**
+     * PBKDF2WithHmacSHA256으로 파생 키를 계산한다.
+     */
     private static byte[] pbkdf2(String rawPassword, String salt, int iterations, int keyLengthBits)
             throws GeneralSecurityException {
 
@@ -78,6 +100,9 @@ public final class DjangoPasswordHasher {
         return skf.generateSecret(spec).getEncoded();
     }
 
+    /**
+     * MessageDigest.isEqual 을 사용한 시간 상수 비교.
+     */
     private static boolean constantTimeEquals(byte[] expected, byte[] actual) {
         return MessageDigest.isEqual(expected, actual);
     }

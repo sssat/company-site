@@ -31,6 +31,9 @@ import lombok.RequiredArgsConstructor;
 // 스프링 웹/HTTP 관련
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 // 자바 표준
@@ -41,18 +44,19 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class NewsController {
 
-    // 로그인한 사용자 PK를 담는 공통 헤더 이름 (AccountsController 와 동일하게 사용)
-    private static final String ACTOR_USER_SEQ_HEADER = "X-USER-SEQ";
+    // JWT 안에서 사용자 PK를 꺼낼 때 사용할 클레임 이름
+    // application.yml의 app.jwt.user-id-claim 기본값과 맞춰서 "user_seq" 사용
+    private static final String USER_ID_CLAIM = "user_seq";
 
     // 비즈니스 로직(뉴스 목록/상세/생성/수정/삭제/S3 presign)을 담당하는 유즈케이스
     // 실제 구현체는 NewsService 이지만, 여기서는 인터페이스(NewsUseCase)에만 의존한다.
     private final NewsUseCase newsUseCase;
 
     // ─────────────────────────────────────────
-    // 1. 뉴스 목록 조회
-    // GET /api/news?q=&category=&page=&size=&sort=/
+    // 1. 뉴스 목록 조회 (비로그인/로그인 모두 가능)
+    // GET /api/news/?q=&category=&page=&size=&sort=
     // ─────────────────────────────────────────
-    @GetMapping("/news")
+    @GetMapping("/news/")
     public ResponseEntity<?> listNews(
             @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "category", required = false) String category,
@@ -84,10 +88,10 @@ public class NewsController {
     }
 
     // ─────────────────────────────────────────
-    // 2. 뉴스 단건 상세 조회
+    // 2. 뉴스 단건 상세 조회 (비로그인/로그인 모두 가능)
     // GET /api/news/{newsSeq}/
     // ─────────────────────────────────────────
-    @GetMapping("/news/{newsSeq}")
+    @GetMapping("/news/{newsSeq}/")
     public ResponseEntity<?> getNewsDetail(@PathVariable("newsSeq") Integer newsSeq) {
         try {
             // 1) path variable -> 요청 DTO
@@ -117,13 +121,18 @@ public class NewsController {
     // ─────────────────────────────────────────
     // 3. 뉴스 생성(관리자)
     // POST /api/admins/news/
+    //
+    // 기존: X-USER-SEQ 헤더에서 actorUserSeq 받음
+    // 변경: JWT의 user_seq 클레임에서 actorUserSeq 가져옴
     // ─────────────────────────────────────────
-    @PostMapping("/admins/news")
+    @PostMapping("/admins/news/")
     public ResponseEntity<?> createNews(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
+            @AuthenticationPrincipal Jwt jwt,
             @RequestBody NewsCreateRequestDto requestDto
     ) {
         try {
+            Integer actorUserSeq = currentUserSeq(jwt);
+
             // 1) DTO -> 유즈케이스 입력 모델
             NewsUseCase.NewsCreateCommand command = requestDto.toCommand(actorUserSeq);
 
@@ -146,32 +155,37 @@ public class NewsController {
     // 4. 뉴스 수정(관리자, 부분 수정 포함)
     // PUT /api/admins/news/{newsSeq}/
     // PATCH /api/admins/news/{newsSeq}/
+    //
+    // 기존: X-USER-SEQ 헤더 사용
+    // 변경: JWT의 user_seq 클레임 사용
     // ─────────────────────────────────────────
-    @PutMapping("/admins/news/{newsSeq}")
+    @PutMapping("/admins/news/{newsSeq}/")
     public ResponseEntity<?> updateNews(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable("newsSeq") Integer newsSeq,
             @RequestBody NewsUpdateRequestDto requestDto
     ) {
-        return doUpdate(actorUserSeq, newsSeq, requestDto);
+        return doUpdate(jwt, newsSeq, requestDto);
     }
 
-    @PatchMapping("/admins/news/{newsSeq}")
+    @PatchMapping("/admins/news/{newsSeq}/")
     public ResponseEntity<?> patchNews(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable("newsSeq") Integer newsSeq,
             @RequestBody NewsUpdateRequestDto requestDto
     ) {
-        return doUpdate(actorUserSeq, newsSeq, requestDto);
+        return doUpdate(jwt, newsSeq, requestDto);
     }
 
     // PUT/PATCH 공통 내부 헬퍼: 입출력 변환 + 서비스 위임만 수행
     private ResponseEntity<?> doUpdate(
-            Integer actorUserSeq,
+            Jwt jwt,
             Integer newsSeq,
             NewsUpdateRequestDto requestDto
     ) {
         try {
+            Integer actorUserSeq = currentUserSeq(jwt);
+
             // 1) DTO -> 유즈케이스 입력 모델
             NewsUseCase.NewsUpdateCommand command =
                     requestDto.toCommand(actorUserSeq, newsSeq);
@@ -196,13 +210,18 @@ public class NewsController {
     // ─────────────────────────────────────────
     // 5. 뉴스 삭제(관리자)
     // DELETE /api/admins/news/{newsSeq}/
+    //
+    // 기존: X-USER-SEQ 헤더 사용
+    // 변경: JWT의 user_seq 클레임 사용
     // ─────────────────────────────────────────
-    @DeleteMapping("/admins/news/{newsSeq}")
+    @DeleteMapping("/admins/news/{newsSeq}/")
     public ResponseEntity<?> deleteNews(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable("newsSeq") Integer newsSeq
     ) {
         try {
+            Integer actorUserSeq = currentUserSeq(jwt);
+
             // 1) 유즈케이스 입력 모델 생성
             NewsUseCase.NewsDeleteCommand command =
                     new NewsUseCase.NewsDeleteCommand(actorUserSeq, newsSeq);
@@ -225,13 +244,18 @@ public class NewsController {
     // ─────────────────────────────────────────
     // 6. 프리사인드 업로드 URL 발급(관리자)
     // POST /api/admins/news/uploads/urls/
+    //
+    // 기존: X-USER-SEQ 헤더 사용
+    // 변경: JWT의 user_seq 클레임 사용
     // ─────────────────────────────────────────
-    @PostMapping("/admins/news/uploads/urls")
+    @PostMapping("/admins/news/uploads/urls/")
     public ResponseEntity<?> createPresignedUploadUrl(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
+            @AuthenticationPrincipal Jwt jwt,
             @RequestBody PresignedUploadRequestDto requestDto
     ) {
         try {
+            Integer actorUserSeq = currentUserSeq(jwt);
+
             // 1) DTO -> 유즈케이스 입력 모델
             NewsUseCase.CreatePresignedUploadUrlCommand command =
                     requestDto.toCommand(actorUserSeq);
@@ -255,5 +279,39 @@ public class NewsController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "업로드 URL 생성에 실패했습니다."));
         }
+    }
+
+    // ─────────────────────────────────────────
+    // 내부 헬퍼 메서드들
+    // ─────────────────────────────────────────
+
+    // JWT Principal에서 현재 로그인 사용자 PK(user_seq) 꺼내는 메서드
+    //  - jwt 가 null 이거나, claim 이 없거나, 타입이 이상하면
+    //    AuthenticationCredentialsNotFoundException 던짐 -> GlobalExceptionHandler에서 401로 매핑
+    private Integer currentUserSeq(Jwt jwt) {
+        if (jwt == null) {
+            throw new AuthenticationCredentialsNotFoundException("로그인이 필요합니다.");
+        }
+
+        Object claim = jwt.getClaim(USER_ID_CLAIM);
+        if (claim == null) {
+            throw new AuthenticationCredentialsNotFoundException("토큰에 사용자 정보가 없습니다.");
+        }
+
+        if (claim instanceof Integer i) {
+            return i;
+        }
+        if (claim instanceof Number n) {
+            return n.intValue();
+        }
+        if (claim instanceof String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException e) {
+                throw new AuthenticationCredentialsNotFoundException("유효하지 않은 사용자 식별자입니다.");
+            }
+        }
+
+        throw new AuthenticationCredentialsNotFoundException("유효하지 않은 사용자 식별자 타입입니다.");
     }
 }

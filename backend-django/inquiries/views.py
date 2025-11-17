@@ -1,4 +1,4 @@
-# views.py — inquiries (처리 상태 변경만 허용 + 영구삭제 전용)
+# inquiries/views.py — inquiries (처리 상태 변경만 허용 + 영구삭제 전용)
 # 주석은 한국어로 작성
 
 from django.db.models import Q

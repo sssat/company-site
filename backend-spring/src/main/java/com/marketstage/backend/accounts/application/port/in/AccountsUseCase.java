@@ -3,8 +3,11 @@
 // 파이썬 장고로 치면 services.py의 함수들의 시그니처들만 모아놓은 파일이다.  
 // 컨트롤러(장고의 views.py에 대응)가 호출할 기능들을 추상(abstract) 메서드 시그니처로 정의만 한다.
 // 따라서 class가 아닌, interface로 선언함 -> 실제 함수 시그니처의 로직 구현은 서비스(AccountsService.java)가 담당 
-// 이곳에서 정의한 추상(abstract) 메서드는 서비스에서 구현, 컨트롤러는 호출만 하고, record 클래스들은 서비스/컨트롤러 모두에서 공통 입출력 모델로 갖다 쓴다.
+// 이곳에서 정의한 추상(abstract) 메서드는 서비스에서 구현하고 컨트롤러는 호출만 한다. 
+// record 클래스들은 서비스/컨트롤러 모두에서 공통 입출력 모델로 갖다 쓴다.
 // 하지만 record 클래스는 이미 여기서 구현까지 끝난 클래스 이므로, 갖다 쓰기만한다.
+// 참고로 유즈케이스와 DTO는 모두 record 문법을 쓰지만, 서로 다른 레이어의 서로 다른 클래스이므로 둘 사이의 상속/연결 등은 전혀 없다.
+// 단지, 값만 담는 바구니의 역할이 필요해서 record 문법을 쓴것 뿐이다.
 
 package com.marketstage.backend.accounts.application.port.in;
 
@@ -83,7 +86,6 @@ public interface AccountsUseCase {
         }
     }
     */
-
     record IdPrecheckResult(
         String idCheckToken, 
         int expiresInSeconds

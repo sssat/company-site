@@ -5,6 +5,8 @@
 
 package com.marketstage.backend.news.application.service;
 
+import com.marketstage.backend.accounts.application.port.out.UserRepository;
+import com.marketstage.backend.accounts.domain.model.User;
 import com.marketstage.backend.common.exception.NotFoundException;
 import com.marketstage.backend.news.application.port.in.NewsUseCase;
 import com.marketstage.backend.news.application.port.out.NewsPostHistoryRepository;
@@ -12,10 +14,9 @@ import com.marketstage.backend.news.application.port.out.NewsPostRepository;
 import com.marketstage.backend.news.application.port.out.PresignedUploadUrlPort;
 import com.marketstage.backend.news.domain.model.NewsPost;
 import com.marketstage.backend.news.domain.model.NewsPostHistory;
-import com.marketstage.backend.accounts.domain.model.User;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +50,9 @@ public class NewsService implements NewsUseCase {
     // 시간 주입용 (테스트 시 고정 Clock 으로 교체 가능)
     private final Clock clock;
 
+    // 관리자 권한 확인용 (User 조회)
+    private final UserRepository userRepository;
+
     @Value("${aws.region:ap-northeast-2}")
     private String awsRegion;
 
@@ -76,12 +80,12 @@ public class NewsService implements NewsUseCase {
         String sortRaw  = safe(query.sort());
 
         int page = query.page() <= 0 ? 1 : query.page();
-        int size = query.size() <= 0 ? 6 : Math.min(query.size(), 24); 
+        int size = query.size() <= 0 ? 6 : Math.min(query.size(), 24);
 
-        // 정렬 파라미터 정규화 
-        String sort = normalizeSort(sortRaw); 
+        // 정렬 파라미터 정규화
+        String sort = normalizeSort(sortRaw);
         boolean sortDesc = sort.startsWith("-");
-        String sortProperty = "publishedAt";  
+        String sortProperty = "publishedAt";
 
         // 카테고리 문자열 -> 내부 int 코드
         Integer categoryInt = null;
@@ -169,7 +173,9 @@ public class NewsService implements NewsUseCase {
     @Override
     public NewsCreateResult createNews(NewsCreateCommand cmd) {
         Objects.requireNonNull(cmd, "cmd");
-        Objects.requireNonNull(cmd.actorUserSeq(), "actorUserSeq");
+
+        // ★ 관리자 확인
+        User author = requireAdmin(cmd.actorUserSeq());
 
         ensureNotBlank(cmd.title(),    "title");
         ensureNotBlank(cmd.excerpt(),  "excerpt");
@@ -219,18 +225,16 @@ public class NewsService implements NewsUseCase {
 
         LocalDateTime now = LocalDateTime.now(clock);
 
-        User authorRef = buildUserRef(cmd.actorUserSeq());
-
         NewsPost post = NewsPost.builder()
-                .publishedBy(authorRef)
+                .publishedBy(author)     // 기존 buildUserRef 대신 실제 User 사용
                 .title(title)
                 .excerpt(excerpt)
                 .content(content)
-                .category((short) categoryInt) 
+                .category((short) categoryInt)
                 .badge(badge)
                 .thumbnailUrl(isBlank(thumbnailUrl) ? null : thumbnailUrl)
                 .imageUrl(isBlank(imageUrl) ? null : imageUrl)
-                .publishedAt(now)  
+                .publishedAt(now)
                 .build();
 
         NewsPost saved = newsPostRepository.save(post);
@@ -246,7 +250,9 @@ public class NewsService implements NewsUseCase {
     public NewsUpdateResult updateNews(NewsUpdateCommand cmd) {
         Objects.requireNonNull(cmd, "cmd");
         Objects.requireNonNull(cmd.newsSeq(), "newsSeq");
-        Objects.requireNonNull(cmd.actorUserSeq(), "actorUserSeq");
+
+        // ★ 관리자 확인
+        User actor = requireAdmin(cmd.actorUserSeq());
 
         NewsPost post = newsPostRepository.findById(cmd.newsSeq())
                 .orElseThrow(() -> new NotFoundException("존재하지 않는 뉴스입니다."));
@@ -284,7 +290,7 @@ public class NewsService implements NewsUseCase {
         // 4) content / image_url 처리
         if (cmd.content() != null) {
             String newBody = cmd.content();
-            String imageUrl = cmd.imageUrl(); 
+            String imageUrl = cmd.imageUrl();
 
             if (imageUrl == null || imageUrl.isBlank()) {
                 String cand = deriveImageUrlFromContent(newBody);
@@ -346,7 +352,7 @@ public class NewsService implements NewsUseCase {
         // 6) 수정자/수정 시간 갱신
         LocalDateTime now = LocalDateTime.now(clock);
         post.setUpdatedAt(now);
-        post.setUpdatedBy(buildUserRef(cmd.actorUserSeq()));
+        post.setUpdatedBy(actor);   // buildUserRef 대신 actor
 
         NewsPost saved = newsPostRepository.save(post);
 
@@ -360,7 +366,9 @@ public class NewsService implements NewsUseCase {
     public void deleteNews(NewsDeleteCommand cmd) {
         Objects.requireNonNull(cmd, "cmd");
         Objects.requireNonNull(cmd.newsSeq(), "newsSeq");
-        Objects.requireNonNull(cmd.actorUserSeq(), "actorUserSeq");
+
+        // ★ 관리자 확인
+        User actor = requireAdmin(cmd.actorUserSeq());
 
         NewsPost post = newsPostRepository.findById(cmd.newsSeq())
                 .orElseThrow(() -> new NotFoundException("존재하지 않는 뉴스입니다."));
@@ -368,15 +376,17 @@ public class NewsService implements NewsUseCase {
         // 1) 삭제 이력 저장 (실패해도 본 삭제는 계속)
         try {
             NewsPostHistory history = NewsPostHistory.builder()
-                    .news(post)                                  // FK (T_NEWS_POST_HISTORY.NEWS_SEQ)
+                    // .news(post)  // FK 연관관계는 사용하지 않고, 스냅샷 컬럼만 사용
                     .newsSeqSnapshot(post.getNewsSeq())          // 스냅샷용 news_seq
                     .titleSnapshot(post.getTitle())              // 스냅샷용 title
-                    .deletedBy(buildUserRef(cmd.actorUserSeq())) // 삭제자 user_seq
+                    .deletedBy(actor)                            // 삭제자 User
                     .deletedAt(LocalDateTime.now(clock))         // 삭제 시각
                     .build();
 
             newsPostHistoryRepository.save(history);
         } catch (Exception e) {
+            // 여기서는 삭제 이력 실패해도 실제 삭제는 계속 진행
+            // log.warn("뉴스 삭제 이력 저장 실패 (newsSeq={})", cmd.newsSeq(), e);
         }
 
         // 2) 실제 뉴스 삭제
@@ -390,7 +400,9 @@ public class NewsService implements NewsUseCase {
     @Transactional(readOnly = true)
     public PresignedUploadUrlResult createPresignedUploadUrl(CreatePresignedUploadUrlCommand cmd) {
         Objects.requireNonNull(cmd, "cmd");
-        Objects.requireNonNull(cmd.actorUserSeq(), "actorUserSeq");
+
+        // ★ 관리자 확인 (리턴값은 사용하지 않아도 됨)
+        requireAdmin(cmd.actorUserSeq());
 
         String kind        = safe(cmd.kind()).toLowerCase(Locale.ROOT);
         String filename    = safe(cmd.filename());
@@ -449,14 +461,6 @@ public class NewsService implements NewsUseCase {
     // 4. 문자열이 null 이거나 공백뿐인지 판단하는 헬퍼
     private static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
-    }
-
-    // 5. User FK 에 user_seq 만 세팅된 "프록시" User 객체를 만들어주는 헬퍼
-    private static User buildUserRef(Integer userSeq) {
-        if (userSeq == null) return null;
-        User u = new User();
-        u.setUserSeq(userSeq);
-        return u;
     }
 
     // 6. 카테고리 int/short -> 문자열로 변환 (0->ALL, 1->INTERNAL, 2->EXTERNAL)
@@ -575,5 +579,26 @@ public class NewsService implements NewsUseCase {
         slug = slug.replaceAll("-{2,}", "-");
         slug = slug.replaceAll("^-+", "").replaceAll("-+$", "");
         return slug;
+    }
+
+    // 15. 관리자(ADMIN(1) / SUPER_ADMIN(2))만 허용하는 헬퍼
+    private User requireAdmin(Integer actorUserSeq) {
+        if (actorUserSeq == null) {
+            throw new AuthenticationCredentialsNotFoundException("로그인이 필요합니다.");
+        }
+
+        User user = userRepository.findById(actorUserSeq)
+                .orElseThrow(() ->
+                        new AuthenticationCredentialsNotFoundException("로그인이 필요합니다."));
+
+        Short gradeCode = (user.getLevel() != null)
+                ? user.getLevel().getGradeCode()
+                : 0;
+
+        if (gradeCode == null || (gradeCode != 1 && gradeCode != 2)) {
+            throw new SecurityException("관리자 권한이 없습니다.");
+        }
+
+        return user;
     }
 }

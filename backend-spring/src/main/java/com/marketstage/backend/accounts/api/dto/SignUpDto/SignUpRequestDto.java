@@ -3,7 +3,7 @@ package com.marketstage.backend.accounts.api.dto.SignUpDto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.marketstage.backend.accounts.application.port.in.AccountsUseCase;
+import com.marketstage.backend.accounts.application.port.in.AccountsUseCase.SignUpCommand;
 
 import java.time.LocalDate;
 
@@ -40,18 +40,20 @@ public record SignUpRequestDto(
         @JsonProperty("email_check_token")
         String emailCheckToken
 ) {
-    public AccountsUseCase.SignUpCommand toCommand() {
-        return new AccountsUseCase.SignUpCommand(
-                userId,
-                email,
-                password,          // rawPassword
-                passwordConfirm,   // passwordConfirm
-                username,
-                birthDate,
-                gender,
-                Boolean.TRUE.equals(agreeWhether),
-                idCheckToken,
-                emailCheckToken
+    // 받아온 회원가입 입력값(request body JSON)을 AccountsUseCase.SignUpCommand로 변환하는 함수
+    // Jackson이 JSON을 DTO로 역직렬화하고, toCommand()가 DTO를 AccountsUseCase.SignUpCommand로 변환한다.
+    public SignUpCommand toCommand() {
+        return new SignUpCommand(
+            userId,         
+            email,           
+            password,         
+            passwordConfirm,  
+            username,          
+            birthDate,         
+            gender,           
+            Boolean.TRUE.equals(agreeWhether), 
+            idCheckToken,      
+            emailCheckToken    
         );
     }
 }

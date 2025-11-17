@@ -1,9 +1,9 @@
 // accounts/application/port/out/JwtVerifier.java
-// 장고에서는 서비스 코드에서 정의 및 구현했지만 여기선 별도의 인터페이스로 분리함
+// 리프레시 토큰을 검증해서 엑세스 토큰 갱신에 사용할 사용자 식별자(userSeq)를 돌려주는 아웃바운드 포트(인터페이스)
 
 package com.marketstage.backend.accounts.application.port.out;
 
 public interface JwtVerifier {
-    // 1. 액세스 토큰을 갱신해주는 함수 (리프레시 토큰이 유효하다면)
+    // 1. 리프레시 토큰을 검증해서, 액세스 토큰 갱신에 사용할 사용자 식별자(userSeq)를 돌려주는 추상(abstract) 메서드
     Integer verifyRefreshAndGetUserSeq(String refreshJwt);
 }

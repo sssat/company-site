@@ -56,12 +56,12 @@ public class InquiriesService implements InquiriesUseCase {
         Objects.requireNonNull(command, "command");
         ensureNotBlank(command.name(), "name");
         ensureNotBlank(command.email(), "email");
-        ensureNotBlank(command.subject(), "subject");
+        ensureNotBlank(command.title(), "title");
         ensureNotBlank(command.message(), "message");
 
         String name    = command.name().trim();
         String email   = command.email().trim();
-        String subject = command.subject().trim();
+        String title = command.title().trim();
         String message = command.message().trim();
 
         // 이름 정규식 검증 
@@ -80,11 +80,11 @@ public class InquiriesService implements InquiriesUseCase {
             throw new IllegalArgumentException("문의 내용은 50자 이상 입력해주세요.");
         }
 
-        // Inquiry 엔티티 생성 (subject -> title 매핑)
+        // Inquiry 엔티티 생성 (title -> title 매핑)
         Inquiry inquiry = Inquiry.builder()
                 .name(name)
                 .email(email)
-                .title(subject)
+                .title(title)
                 .message(message)
                 .build();
 
@@ -145,7 +145,7 @@ public class InquiriesService implements InquiriesUseCase {
             Integer processedByUserSeq =
                     (inq.getProcessedBy() != null ? inq.getProcessedBy().getUserSeq() : null);
 
-            String subject     = safe(inq.getTitle());
+            String title     = safe(inq.getTitle());
             String excerpt     = buildExcerpt(inq.getMessage());
             String statusLabel = buildStatusLabel(processed);
 
@@ -153,7 +153,7 @@ public class InquiriesService implements InquiriesUseCase {
                     inq.getInquirySeq(),
                     safe(inq.getName()),
                     safe(inq.getEmail()),
-                    subject,
+                    title,
                     excerpt,
                     inq.getSubmittedAt(),
                     processed,
@@ -187,7 +187,7 @@ public class InquiriesService implements InquiriesUseCase {
             inq.getInquirySeq(),
             safe(inq.getName()),
             safe(inq.getEmail()),
-            safe(inq.getTitle()),     // subject
+            safe(inq.getTitle()),     // title
             safe(inq.getMessage()),
             inq.getSubmittedAt(),
             processed,
@@ -206,34 +206,24 @@ public class InquiriesService implements InquiriesUseCase {
         Objects.requireNonNull(command.actorUserSeq(), "actorUserSeq");
         Objects.requireNonNull(command.inquirySeq(), "inquirySeq");
 
-        // 관리자 권한 + 처리자 엔티티
+        // 1) 관리자 권한 + 처리자 엔티티 조회
         User operator = requireAdmin(command.actorUserSeq());
 
-        // 대상 문의 조회 (select_for_update 대응)
+        // 2) 대상 문의 조회 (select_for_update 대응)
         Inquiry inq = inquiryRepository.findByIdForUpdate(command.inquirySeq())
                 .orElseThrow(() -> new NotFoundException("대상을 찾을 수 없습니다."));
 
-        boolean requested = command.processed(); // 클라이언트가 요청한 상태
-        boolean current   = inq.isProcessed();   // 현재 DB에 저장된 상태
-
-        // False로 보내면: 완료 -> 미완료 되돌리기 시도
-        if (!requested) {
-            if (current) {
-                // 이미 완료된 문의는 되돌릴 수 없음
-                throw new IllegalStateException("이미 처리완료된 문의는 되돌릴 수 없습니다.");
-            }
-            // 이미 미처리 상태라면 그대로 유지 (멱등) -> 결과만 반환
+        // 3) 이미 처리완료라면 멱등 처리: 그대로 반환
+        if (inq.isProcessed()) {
             return toProcessResult(inq);
         }
 
-        // True로 보내면: 처리완료로 전환
-        if (!current) {
-            LocalDateTime now = LocalDateTime.now(clock);
-            // 도메인 편의 메서드 사용
-            inq.markProcessed(operator, now);
-            inq = inquiryRepository.save(inq);
-        }
+        // 4) 처리완료로 전환
+        LocalDateTime now = LocalDateTime.now(clock);
+        inq.markProcessed(operator, now);   // isProcessed=true, processedAt, processedBy 설정
+        inq = inquiryRepository.save(inq);
 
+        // 5) 결과 변환
         return toProcessResult(inq);
     }
 
@@ -324,7 +314,7 @@ public class InquiriesService implements InquiriesUseCase {
 
         return new ProcessInquiryResult(
                 inq.getInquirySeq(),
-                safe(inq.getTitle()),   // subject
+                safe(inq.getTitle()),   // title
                 processed,
                 inq.getProcessedAt(),
                 processedByUserSeq,

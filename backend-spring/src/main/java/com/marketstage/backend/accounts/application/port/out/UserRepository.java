@@ -17,6 +17,8 @@ import com.marketstage.backend.accounts.domain.model.User;
 public interface UserRepository {
 
     // 1. PK로 단건을 조회
+    // User 엔티티에서 userSeq가 @Id로 지정된 PK이기 때문에, 여기서는 "id"와 "userSeq"가 같은 값을 가리킨다.
+    // 따라서 이 포트 인터페이스 관점에서는 메서드명을 findById라고 해도 되고, findByUserSeq라고 해도 무방하다.
     // 리턴: Optional<User> -> User 타입의 반환값이 "있을 수도 있고, 없을수도 있다"는 표현. <>는 제네릭 타입
     // 즉, 조회 했는데 해당 유저가 없을 수도 있기 때문에 Optional
     // 메서드명: findById

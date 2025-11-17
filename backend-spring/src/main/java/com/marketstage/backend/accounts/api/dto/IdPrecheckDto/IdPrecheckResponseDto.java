@@ -5,6 +5,7 @@
 // 실제 직렬화 작업은 Jackson(ObjectMapper)이 수행
 // 즉, 우리가 ResponseDto 인스턴스를 만들고, Jackson(ObjectMapper)이 그 객체를 JSON으로 직렬화해서 response body에 실어 보낸다.
 // ResponseDto 객체 생성 ----> (Jackson이 직렬화) ---- JSON ----> [클라이언트]
+// => 직렬화: ResponseDto(자바 객체) -> JSON
 
 package com.marketstage.backend.accounts.api.dto.IdPrecheckDto;
 

@@ -13,7 +13,7 @@ public interface InquiriesUseCase {
     record CreateInquiryCommand(
             String name,
             String email,
-            String subject,   // Django의 title에 매핑될 값
+            String title,   // Django의 title에 매핑될 값
             String message
     ) {}
 
@@ -38,7 +38,7 @@ public interface InquiriesUseCase {
             Integer inquirySeq,
             String name,
             String email,
-            String subject,
+            String title,
             String excerpt,
             LocalDateTime submittedAt,
             boolean processed,
@@ -61,7 +61,7 @@ public interface InquiriesUseCase {
             Integer inquirySeq,
             String name,
             String email,
-            String subject,
+            String title,
             String message,           // 문의 내용 전문
             LocalDateTime submittedAt,
             boolean processed,
@@ -80,7 +80,7 @@ public interface InquiriesUseCase {
     // 8. 문의 처리 상태 변경 결과(response)를 담은 클래스
     record ProcessInquiryResult(
             Integer inquirySeq,
-            String subject,
+            String title,
             boolean processed,
             LocalDateTime processedAt,
             Integer processedByUserSeq,

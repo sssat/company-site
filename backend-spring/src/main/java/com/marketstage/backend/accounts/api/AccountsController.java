@@ -50,6 +50,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 // 자바 표준 라이브러리
@@ -75,9 +78,10 @@ public class AccountsController {
     // /api/auth 경로 이하에서만 브라우저가 이 쿠키를 자동으로 붙여 보냄
     private static final String REFRESH_COOKIE_PATH = "/api/auth";
 
-    // request header에 실려오는 현재 로그인 유저의 PK 번호를 담는 헤더 이름
-    private static final String ACTOR_USER_SEQ_HEADER = "X-USER-SEQ";
-    
+    // JWT 안에서 사용자 PK를 꺼낼 때 사용할 클레임 이름
+    // application.yml의 app.jwt.user-id-claim 기본값과 맞춰서 "user_seq"로 사용
+    private static final String USER_ID_CLAIM = "user_seq";
+
     // 비즈니스 로직을 호출하기 위한 인스턴스 변수
     // 실제 구현 클래스는 AccountsService지만, 컨트롤러에서는 구현체가 아니라 AccountsUseCase 인터페이스 타입으로 호출한다.
     private final AccountsUseCase accountsUseCase;
@@ -90,21 +94,10 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 1. precheckUserId: 아이디 사전 중복검사 컨트롤러 함수 구현
-    // POST /api/auth/register/precheck/user-id
+    // POST /api/auth/register/precheck/user-id/
     // ─────────────────────────────────────────
 
-    // 클라이언트가 POST 방식으로 /api/auth/register/precheck/user-id 주소로 요청을 보내면,
-    // 이 아래에 있는 precheckUserId() 메서드가 그 요청을 처리하라는 뜻
-    @PostMapping("/auth/register/precheck/user-id")
-
-    // 함수명: precheckUserId
-    // 반환 타입: ResponseEntity<IdPrecheckResponseDto> => IdPrecheckResponseDto 형태의 JSON을 담은 HTTP 응답(ResponseEntity)로 돌려준다
-    
-    // 파라미터: @RequestBody IdPrecheckRequestDto request
-    // @RequestBody(파라미터 어노테이션): request body(JSON)를 이 파라미터에 매핑해달라는 뜻
-    // 예를들어 프론트에서 { "user_id": "test123" } 이런 request body를 보내면 스프링이 이 JSON을 보고 IdPrecheckRequestDto의 필드에 맞춰서
-    // user_id -> userId 같은 식으로 자동으로 값 채워서(DTO에 @JsonProperty("user_id")가 있다면) 
-    // new IdPrecheckRequestDto(...) 객체를 만들어서 request 파라미터에 넣어줌
+    @PostMapping("/auth/register/precheck/user-id/")
     public ResponseEntity<IdPrecheckResponseDto> precheckUserId(@RequestBody IdPrecheckRequestDto request) {
         // 1. 성공 시 -> 200 + available
         try {
@@ -138,9 +131,9 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 2. precheckEmail: 이메일 사전 중복검사 컨트롤러 함수 구현
-    // POST /api/auth/register/precheck/email
+    // POST /api/auth/register/precheck/email/
     // ─────────────────────────────────────────
-    @PostMapping("/auth/register/precheck/email")
+    @PostMapping("/auth/register/precheck/email/")
     public ResponseEntity<EmailPrecheckResponseDto> precheckEmail(@RequestBody EmailPrecheckRequestDto request) {
         // 1. 성공 시 -> 200 + available
         try {
@@ -173,14 +166,12 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 3. signUp: 회원가입 컨트롤러 함수 구현
-    // POST /api/auth/register
+    // POST /api/auth/register/
     // ─────────────────────────────────────────
-    @PostMapping("/auth/register")
+    @PostMapping("/auth/register/")
     public ResponseEntity<SignUpResponseDto> signUp(@RequestBody SignUpRequestDto request) {
 
-        // var: 메서드 내부에서만 쓰이는 지역변수 선언 문법 (가독성을 위해 사용)
-        // 원하면 var 안쓰고 AccountsUseCase.SignUpCommand cmd = request.toCommand(); 처럼 명시형으로 써도된다.
-        // Jackson이 JSON을 DTO로 역직렬화한 것을 -> 서비스 입력 모델(SignUpCommand)로 변환 
+        // DTO -> 서비스 입력 모델(SignUpCommand) 변환
         var cmd = request.toCommand();
 
         // 서비스 코드의 signUp 함수 호출 후 반환값(userSeq, joinedAt) result 객체에 저장
@@ -195,13 +186,15 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 4. login: 로그인 컨트롤러 함수 구현
-    // POST /api/auth/login
+    // POST /api/auth/login/
     // - access_token 은 JSON 바디
     // - refresh_token 은 HttpOnly 쿠키에만 저장 (보안 고려)
     // ─────────────────────────────────────────
-    @PostMapping("/auth/login")
-    public ResponseEntity<LoginResponseDto> login(@RequestBody LoginRequestDto request, HttpServletRequest httpRequest) {
-        
+    @PostMapping("/auth/login/")
+    public ResponseEntity<LoginResponseDto> login(
+            @RequestBody LoginRequestDto request,
+            HttpServletRequest httpRequest
+    ) {
         // DTO에서 아이디/비번 꺼냄
         String userId = request.userId();
         String password = request.password();
@@ -229,11 +222,11 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 5. refreshAccessToken: 액세스 토큰 갱신 컨트롤러 함수 구현
-    // POST /api/auth/refresh
+    // POST /api/auth/refresh/
     // - refresh 쿠키 기반
     // - 성공 시 새 access 토큰 JSON 반환
     // ─────────────────────────────────────────
-    @PostMapping("/auth/refresh")
+    @PostMapping("/auth/refresh/")
     public ResponseEntity<TokenRefreshResponseDto> refreshAccessToken(HttpServletRequest request) {
         
         // 헬퍼함수를 사용하여 request header의 쿠키에서 리프레시 토큰 추출
@@ -264,10 +257,10 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 6. logout: 로그아웃 컨트롤러 함수 구현
-    // POST /api/auth/logout
+    // POST /api/auth/logout/
     // - refresh 쿠키 삭제
     // ─────────────────────────────────────────
-    @PostMapping("/auth/logout")
+    @PostMapping("/auth/logout/")
     public ResponseEntity<LogoutResponseDto> logout() {
 
         // 헬퍼함수를 사용해 refresh 쿠키 삭제용 쿠키 생성
@@ -281,9 +274,9 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 7. findUserId: 아이디 찾기 컨트롤러 함수 구현
-    // POST /api/auth/find-id
+    // POST /api/auth/find-id/
     // ─────────────────────────────────────────
-    @PostMapping("/auth/find-id")
+    @PostMapping("/auth/find-id/")
     public ResponseEntity<FindIdResponseDto> findUserId(@RequestBody FindIdRequestDto request) {
         try {
             // 1) 요청 JSON -> DTO(자동) -> 서비스 입력 모델(FindIdCommand)로 변환
@@ -304,9 +297,9 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 8. findPassword: 비밀번호 찾기 (임시 비밀번호 발급) 컨트롤러 함수 구현
-    // POST /api/auth/find-password
+    // POST /api/auth/find-password/
     // ─────────────────────────────────────────
-    @PostMapping("/auth/find-password")
+    @PostMapping("/auth/find-password/")
     public ResponseEntity<FindPasswordResponseDto> findPassword(@RequestBody FindPasswordRequestDto request) {
         try {
 
@@ -324,7 +317,6 @@ public class AccountsController {
                         FindPasswordResponseDto.success(result, message)
                 );
             } 
-            
             // 기본값 false(운영)면 임시 비번은 response body에 미포함하고 안내 메시지만 반환 -> 비밀번호는 이메일 등으로만 전달
             else {
                 return ResponseEntity.ok(
@@ -333,7 +325,6 @@ public class AccountsController {
             }
 
         } 
-        
         // 사용자 정보가 불일치/미존재면 서비스가 NotFoundException을 던지고, 컨트롤러는 404로 매핑
         catch (NotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -343,47 +334,48 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 9. changePassword: 비밀번호 변경 컨트롤러 함수 구현
-    // POST /api/auth/change-password
+    // POST /api/auth/change-password/
     //
-    // 지금은 로그인된 사용자 번호를 헤더 X-USER-SEQ에서 받도록 구현.
-    // 나중에 Spring Security로 JWT 인증 붙이면
-    // @AuthenticationPrincipal 등으로 교체하면 된다.
+    // JWT 리소스 서버가 Access 토큰을 검증하고, @AuthenticationPrincipal Jwt로
+    // 인증된 사용자의 user_seq를 꺼내서 서비스에 actorUserSeq로 전달한다.
     // ─────────────────────────────────────────
-    @PostMapping("/auth/change-password")
+    @PostMapping("/auth/change-password/")
     public ResponseEntity<Map<String, String>> changePassword(
-        @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
-        @RequestBody ChangePasswordRequestDto request
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody ChangePasswordRequestDto request
     ) {
+        // 0) JWT에서 현재 로그인 사용자 PK 추출 (없으면 401)
+        Integer actorUserSeq = currentUserSeq(jwt);
+
         // 1) DTO -> 서비스 커맨드로 변환(사용자 PK 주입)
         AccountsUseCase.ChangePasswordCommand cmd = request.toCommand(actorUserSeq);
-
+    
         // 2) 비즈니스 로직 실행(현재 비번 검증, 정책 검증, 저장)
         accountsUseCase.changePassword(cmd);
-
+    
         // 3) 리프레시 토큰 무효화: 삭제 쿠키 내려보내기 (헬퍼함수 사용)
         ResponseCookie deleteCookie = buildDeleteRefreshCookie();
-
+    
         // 4) 200 OK + 메시지
-        return ResponseEntity.ok()
-            .header(HttpHeaders.SET_COOKIE, deleteCookie.toString())
-            .body(Map.of("message", "비밀번호가 변경되었습니다. 다시 로그인하세요."));
+        return ResponseEntity.ok()      
+                .header(HttpHeaders.SET_COOKIE, deleteCookie.toString())
+                .body(Map.of("message", "비밀번호가 변경되었습니다. 다시 로그인하세요."));
     }
 
     // ─────────────────────────────────────────
     // 10. promoteToAdmin: 관리자 승격 (USER -> ADMIN) 컨트롤러 함수 구현
-    // POST /api/admins/promote
+    // POST /api/admins/promote/
+    //
+    // JWT의 user_seq를 operator(요청자) PK로 사용
     // ─────────────────────────────────────────
-    @PostMapping("/admins/promote")
-
-    // @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer operatorUserSeq: 파라미터
-    // @RequestHeader: request header에서 값을 읽어오는 어노테이션
-    // ACTOR_USER_SEQ_HEADER : 헤더 이름 상수 (코드에선 "X-USER-SEQ"로 정의됨)
-    // Integer operatorUserSeq : 읽어온 값을 정수로 받아 저장할 변수
-    // 예를들어 클라이언트가 X-USER-SEQ: 123 이렇게 보내면, 컨트롤러가 자동으로 operatorUserSeq에 123을 넣어준다.
+    @PostMapping("/admins/promote/")
     public ResponseEntity<AdminPromoteResponseDto> promoteToAdmin(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer operatorUserSeq, 
+            @AuthenticationPrincipal Jwt jwt,
             @RequestBody AdminPromoteRequestDto request
     ) {
+        // JWT에서 요청자 PK 추출
+        Integer operatorUserSeq = currentUserSeq(jwt);
+
         // 서비스 호출 + 승격 실행
         AccountsUseCase.PromoteResult result =
                 accountsUseCase.promoteToAdminReturningResult(
@@ -404,13 +396,17 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 11. demoteToUser: 관리자 강등 (ADMIN -> USER) 컨트롤러 함수 구현
-    // POST /api/admins/demote
+    // POST /api/admins/demote/
+    //
+    // JWT의 user_seq를 operator(요청자) PK로 사용
     // ─────────────────────────────────────────
-    @PostMapping("/admins/demote")
+    @PostMapping("/admins/demote/")
     public ResponseEntity<AdminDemoteResponseDto> demoteToUser(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer operatorUserSeq, 
+            @AuthenticationPrincipal Jwt jwt,
             @RequestBody AdminDemoteRequestDto request
     ) {
+        Integer operatorUserSeq = currentUserSeq(jwt);
+
         AccountsUseCase.DemoteResult result =
                 accountsUseCase.demoteToUserReturningResult(
                         request.userSeq(),
@@ -427,11 +423,13 @@ public class AccountsController {
 
     // ─────────────────────────────────────────
     // 12. listUsers: 회원 목록 조회 (관리자 전용) 컨트롤러 함수 구현
-    // GET /api/admins/users?page=1&size=10&q=검색어
+    // GET /api/admins/users/?page=1&size=10&q=검색어
+    //
+    // JWT의 user_seq를 actorUserSeq로 사용하여, 서비스에서 ADMIN 이상 권한 체크
     // ─────────────────────────────────────────
-    @GetMapping("/admins/users")
+    @GetMapping("/admins/users/")
     public ResponseEntity<UserListResponseDto> listUsers(
-            @RequestHeader(ACTOR_USER_SEQ_HEADER) Integer actorUserSeq,
+            @AuthenticationPrincipal Jwt jwt,
 
             // 쿼리스트링 파라미터 page를 정수로 받는다. 안 보내면 기본값 1
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -442,6 +440,8 @@ public class AccountsController {
             // 쿼리스트링 파라미터 q(검색어). 옵션이므로 없어도 된다(required=false). 없으면 q=null
             @RequestParam(name = "q", required = false) String q
     ) {
+        Integer actorUserSeq = currentUserSeq(jwt);
+
         // 요청 파라미터를 하나로 묶는 입력 모델을 만든다
         AccountsUseCase.UserListQuery query =
                 new AccountsUseCase.UserListQuery(actorUserSeq, page, size, q);
@@ -461,6 +461,7 @@ public class AccountsController {
     // ─────────────────────────────────────────
     // 내부 헬퍼 메서드들
     // 얘네들은 비즈니스 로직이 아니라서 서비스에서 구현 안하고 컨트롤러에서 구현함
+    // 헬퍼는 어차피 이 클래스 안에서만 쓸거니까 private으로 선언
     // ─────────────────────────────────────────
 
     // 1. 클라이언트 IP 주소를 뽑아오는 메서드
@@ -512,5 +513,34 @@ public class AccountsController {
                 .path(REFRESH_COOKIE_PATH)
                 .maxAge(0)
                 .build();
+    }
+
+    // 6. Jwt Principal에서 현재 로그인 사용자 PK(user_seq) 꺼내는 메서드
+    //    - Jwt가 null이거나, claim이 없거나, 타입이 이상하면 AuthenticationCredentialsNotFoundException 던짐 -> 401로 매핑
+    private Integer currentUserSeq(Jwt jwt) {
+        if (jwt == null) {
+            throw new AuthenticationCredentialsNotFoundException("로그인이 필요합니다.");
+        }
+
+        Object claim = jwt.getClaim(USER_ID_CLAIM);
+        if (claim == null) {
+            throw new AuthenticationCredentialsNotFoundException("토큰에 사용자 정보가 없습니다.");
+        }
+
+        if (claim instanceof Integer i) {
+            return i;
+        }
+        if (claim instanceof Number n) {
+            return n.intValue();
+        }
+        if (claim instanceof String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException e) {
+                throw new AuthenticationCredentialsNotFoundException("유효하지 않은 사용자 식별자입니다.");
+            }
+        }
+
+        throw new AuthenticationCredentialsNotFoundException("유효하지 않은 사용자 식별자 타입입니다.");
     }
 }

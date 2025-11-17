@@ -27,18 +27,8 @@ public record LoginResponseDto(
         @JsonProperty("refresh_token")
         String refreshToken
 ) {
-    public static LoginResponseDto from(AccountsUseCase.LoginResult result) {
-        return new LoginResponseDto(
-                result.userSeq(),
-                result.userId(),
-                result.email(),
-                result.role(),
-                result.userName(),
-                result.accessToken(),
-                result.refreshToken()
-        );
-    }
-    
+    // 서비스가 돌려준 LoginResult를 응답 DTO로 변환하는 함수
+    // refreshToken은 JSON 바디에서 숨김
     public static LoginResponseDto withoutRefreshToken(AccountsUseCase.LoginResult result) {
         return new LoginResponseDto(
                 result.userSeq(),

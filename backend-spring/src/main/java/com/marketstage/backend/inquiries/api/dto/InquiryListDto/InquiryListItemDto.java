@@ -14,7 +14,11 @@ public record InquiryListItemDto(
 
         String name,
         String email,
-        String subject,
+
+        // Java 쪽 이름은 title 유지, JSON 키는 subject 로 내보냄
+        @JsonProperty("subject")
+        String title,
+
         String excerpt,
 
         @JsonProperty("submitted_at")
@@ -39,7 +43,7 @@ public record InquiryListItemDto(
                 item.inquirySeq(),
                 item.name(),
                 item.email(),
-                item.subject(),
+                item.title(),          // 도메인/유즈케이스의 title 그대로 사용
                 item.excerpt(),
                 item.submittedAt(),
                 item.processed(),

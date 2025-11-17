@@ -846,7 +846,6 @@ class ChangePasswordView(APIView):
         return resp
 
 
-
 # ─────────────────────────────────────────────────────────
 # 10. 관리자 권한 부여(승격) - 클래스형 뷰
 # POST /api/admins/promote/

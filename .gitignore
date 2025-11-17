@@ -41,3 +41,6 @@ out/
 /backend-spring/out/
 /backend-spring/.idea/
 /backend-spring/*.iml
+
+/ops/local/
+/**/set-env-*.ps1

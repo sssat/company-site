@@ -12,7 +12,9 @@ public record InquiryProcessResponseDto(
         @JsonProperty("inquiry_seq")
         Integer inquirySeq,
 
-        String subject,
+        // Java 필드명은 title, JSON 키는 subject 로 내보냄
+        @JsonProperty("subject")
+        String title,
 
         @JsonProperty("is_processed")
         boolean processed,
@@ -29,7 +31,7 @@ public record InquiryProcessResponseDto(
     public static InquiryProcessResponseDto from(InquiriesUseCase.ProcessInquiryResult result) {
         return new InquiryProcessResponseDto(
                 result.inquirySeq(),
-                result.subject(),
+                result.title(),
                 result.processed(),
                 result.processedAt(),
                 result.processedByUserSeq(),
