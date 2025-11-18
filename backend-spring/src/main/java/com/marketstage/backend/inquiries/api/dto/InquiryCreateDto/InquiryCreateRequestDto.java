@@ -14,7 +14,7 @@ public record InquiryCreateRequestDto(
         @JsonProperty("email")
         String email,
 
-        @JsonProperty("title")
+        @JsonProperty("subject")
         String title,
 
         @JsonProperty("message")
