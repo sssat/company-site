@@ -94,7 +94,11 @@
   line-height: 1.7;
   font-size: 14px;
   color: #111827;
-  white-space: pre-wrap;
+
+  /* 내용 줄바꿈 설정 */
+  white-space: pre-wrap;      /* 기존 줄바꿈 유지 + 자동 줄바꿈 */
+  word-break: break-all;      /* 너무 긴 단어도 중간에서 끊기 */
+  overflow-wrap: anywhere;    /* 어디서든 줄바꿈 허용 (보조용) */
 }
 
 /* 액션 버튼 — 회색 버튼 */
