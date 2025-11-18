@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./ContactBoardPage.module.css";
+
 import {
   listInquiries,
   type InquiryListItem,
@@ -10,73 +11,38 @@ import {
 
 const PAGE_SIZE = 10;
 
-/** API 파라미터 타입 안전 추론 */
+/** API 파라미터 타입 */
 type RawParams = Parameters<typeof listInquiries>[0];
 type ListParams = NonNullable<RawParams>;
-type ApiStatus = ListParams extends { status?: infer S } ? NonNullable<S> : never;
 
-/** 이메일 판별(제목/작성자 검색에는 제외) */
-const EMAIL_FULL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-const EMAIL_HINT = /@|\.com$|\.net$|\.org$|\.io$|\.co$|\.kr$/i;
-const isEmailish = (t: string) => EMAIL_FULL.test(t) || EMAIL_HINT.test(t);
+/** 화면에서 쓰는 상태 필터 값 */
+type UiStatus = "all" | "pending" | "done";
 
-/** 상태 키워드 파싱 + 이메일 토큰 제거 */
-type UiStatus = "processing" | "done" | "all";
+/** 상태 검색 키워드들 */
+const PENDING_WORDS = ["처리중", "진행중", "대기중", "미처리", "pending"];
+const DONE_WORDS = ["처리완료", "완료", "done", "complete"];
+
+/** 검색창 문자열을 q/status로 분리 */
 function parseSearchInput(raw: string): { keyword: string; uiStatus: UiStatus } {
-  const tokens = raw.trim().split(/\s+/).filter(Boolean);
-  let uiStatus: UiStatus = "all";
-  const rest: string[] = [];
-
-  for (const tok of tokens) {
-    const low = tok.toLowerCase();
-
-    if (/(처리중|진행중|processing|inprogress|pending)/.test(low)) {
-      uiStatus = "processing";
-      continue;
-    }
-    if (/(처리완료|완료|done|complete|processed|completed)/.test(low)) {
-      uiStatus = "done";
-      continue;
-    }
-
-    // 이메일처럼 보이면 검색 키워드에서 제외(제목/작성자만 검색)
-    if (isEmailish(tok)) continue;
-
-    rest.push(tok);
+  const t = raw.trim();
+  if (!t) {
+    return { keyword: "", uiStatus: "all" };
   }
 
-  return { keyword: rest.join(" "), uiStatus };
-}
+  const low = t.toLowerCase();
 
-/** 백엔드 status 명세 차이를 흡수하기 위한 후보군 */
-function statusCandidates(ui: UiStatus): readonly ApiStatus[] | undefined {
-  if (ui === "all") return undefined;
-  const cands =
-    ui === "processing"
-      ? ["processing", "unprocessed", "PENDING", "IN_PROGRESS", "pending"]
-      : ["done", "processed", "COMPLETED", "DONE", "complete"];
-  return cands.map((v) => v as unknown as ApiStatus);
-}
-
-/** listInquiries를 후보 status로 재시도 */
-async function fetchWithStatusFallback(
-  base: Omit<ListParams, "status">,
-  ui: UiStatus
-): Promise<InquiryListResponse> {
-  const cands = statusCandidates(ui);
-
-  if (cands && cands.length) {
-    for (const s of cands) {
-      try {
-        const res = await listInquiries({ ...(base as ListParams), status: s });
-        return res;
-      } catch {
-        /* 다음 후보 시도 */
-      }
-    }
+  // "처리중" 류 → 상태 필터 전용
+  if (PENDING_WORDS.some((w) => low === w.toLowerCase())) {
+    return { keyword: "", uiStatus: "pending" };
   }
-  // 후보 전부 실패 -> status 없이(전체) 시도
-  return listInquiries(base as ListParams);
+
+  // "처리완료" 류 → 상태 필터 전용
+  if (DONE_WORDS.some((w) => low === w.toLowerCase())) {
+    return { keyword: "", uiStatus: "done" };
+  }
+
+  // 나머지는 전부 제목/작성자 검색용
+  return { keyword: t, uiStatus: "all" };
 }
 
 export default function ContactBoardPage() {
@@ -120,7 +86,7 @@ export default function ContactBoardPage() {
   /** 검색 실행 (버튼/엔터 공통) */
   const runSearch = () => {
     const { keyword, uiStatus } = parseSearchInput(searchInput);
-    setAppliedKeyword(keyword);   // 이메일 토큰 제거된 키워드만 서버로 보냄
+    setAppliedKeyword(keyword);
     setAppliedUiStatus(uiStatus);
     setPage(1);
   };
@@ -128,44 +94,44 @@ export default function ContactBoardPage() {
   /** 목록 로드 */
   useEffect(() => {
     let alive = true;
+
     (async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const base: Omit<ListParams, "status"> = {
+        const base: ListParams = {
           page,
           size: PAGE_SIZE,
-          q: appliedKeyword || (undefined as unknown as ListParams["q"]),
+          q: appliedKeyword || undefined,
           order: "recent" as ListParams["order"],
-        } as Omit<ListParams, "status">;
+        } as ListParams;
 
-        const data = await fetchWithStatusFallback(base, appliedUiStatus);
+        const params: ListParams =
+          appliedUiStatus === "all"
+            ? base
+            : ({
+                ...base,
+                status: appliedUiStatus as ListParams["status"],
+              } as ListParams);
 
-        // 서버가 이메일로 매칭한 항목이 섞여 있을 수 있으므로
-        // 화면에는 "제목/작성자"에만 키워드가 포함된 항목만 노출
-        let nextItems: InquiryListItem[] = data.items;
-        const kw = appliedKeyword.trim().toLowerCase();
-        if (kw) {
-          const tokens = kw.split(/\s+/).filter(Boolean);
-          nextItems = data.items.filter((it) => {
-            const subject = (it.subject ?? "").toLowerCase();
-            const author = (it.name ?? "").toLowerCase();
-            return tokens.some((tk) => subject.includes(tk) || author.includes(tk));
-          });
-        }
+        const data: InquiryListResponse = await listInquiries(params);
 
         if (!alive) return;
-        setItems(nextItems);
+
+        // 서버에서 이미 q/status 기준으로 필터된 결과 그대로 사용
+        setItems(data.items);
         setTotal(data.total);
         setTotalPages(Math.max(1, data.total_pages));
-      } catch {
+      } catch (err) {
         if (!alive) return;
+        console.error("listInquiries 실패:", err);
         setError("목록을 불러오는 중 문제가 발생했습니다.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -228,7 +194,9 @@ export default function ContactBoardPage() {
                       <td className={styles.tdStatus}>
                         <span
                           className={
-                            statusPending ? styles.statusPending : styles.statusDone
+                            statusPending
+                              ? styles.statusPending
+                              : styles.statusDone
                           }
                         >
                           {statusPending ? "처리중" : "처리완료"}
@@ -238,7 +206,7 @@ export default function ContactBoardPage() {
                   );
                 })}
 
-              {!loading && items.length === 0 && (
+              {!loading && items.length === 0 && !error && (
                 <tr>
                   <td colSpan={5} className={styles.empty}>
                     결과가 없습니다.
@@ -304,7 +272,9 @@ export default function ContactBoardPage() {
             return (
               <button
                 key={n}
-                className={`${styles.pagerNum} ${n === page ? styles.current : ""}`}
+                className={`${styles.pagerNum} ${
+                  n === page ? styles.current : ""
+                }`}
                 onClick={() => setPage(n)}
                 aria-current={n === page ? "page" : undefined}
               >
