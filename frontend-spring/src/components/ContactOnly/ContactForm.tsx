@@ -78,6 +78,9 @@ export default function ContactForm({
     if (generalError) setGeneralError(null);
   };
 
+  const NAME_MIN_LEN = 2;
+  const NAME_MAX_LEN = 50;
+
   const validate = (v: FormState) => {
     const next: Partial<FormState> = {};
     const name = v.name.trim();
@@ -85,16 +88,33 @@ export default function ContactForm({
     const subject = v.subject.trim();
     const message = v.message.trim();
 
-    if (!name) next.name = "성명을 입력해주세요.";
+    // 이름 검증
+    if (!name) {
+      next.name = "이름을 입력해주세요.";
+    } else if (name.length < NAME_MIN_LEN || name.length > NAME_MAX_LEN) {
+      next.name = `이름은 ${NAME_MIN_LEN}자 이상 ${NAME_MAX_LEN}자 이하의 한글/영문과 공백만 사용할 수 있습니다.`;
+    }
+
+    // 이메일 검증
     if (!email) {
       next.email = "이메일을 입력해주세요."; // 공란일 때
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       next.email = "이메일 형식을 확인해주세요."; // 값은 있는데 형식 불일치
     }
-    if (!subject) next.subject = "제목을 입력해주세요.";
+
+    // 제목 검증
+    if (!subject) {
+      next.subject = "제목을 입력해주세요.";
+    } else if (subject.length > 50) {
+      next.subject = "제목은 최대 50자까지 입력해주세요.";
+    }
+
+    // 메시지 검증
     if (message.length < 50) next.message = "메시지는 50자 이상 입력해주세요.";
+
     return next;
   };
+
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

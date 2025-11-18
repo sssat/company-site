@@ -31,8 +31,11 @@ public class InquiriesService implements InquiriesUseCase {
     // 상수/정규식
     // ─────────────────────────────────────────────────────────
     private static final Pattern NAME_PATTERN =
-            Pattern.compile("^(?=.{2,100}$)[가-힣a-zA-Z]+(?: [가-힣a-zA-Z]+)*$");
+            Pattern.compile("^(?=.{2,50}$)[가-힣a-zA-Z]+(?: [가-힣a-zA-Z]+)*$");
 
+    private static final int NAME_MIN_LEN = 50;
+    private static final int NAME_MAX_LEN = 50;
+    private static final int TITLE_MAX_LEN = 50;
     private static final int MESSAGE_MIN_LEN = 50;
 
     // ─────────────────────────────────────────────────────────
@@ -61,18 +64,23 @@ public class InquiriesService implements InquiriesUseCase {
 
         String name    = command.name().trim();
         String email   = command.email().trim();
-        String title = command.title().trim();
+        String title   = command.title().trim();
         String message = command.message().trim();
 
         // 이름 정규식 검증 
         if (!NAME_PATTERN.matcher(name).matches()) {
-            throw new IllegalArgumentException("이름은 2~100자 한글/영문과 공백만 사용할 수 있습니다.");
+            throw new IllegalArgumentException("이름은 2~50자 한글/영문과 공백만 사용할 수 있습니다.");
         }
 
         // 간단 이메일 포맷 검증
         int at = email.indexOf('@');
         if (at <= 0 || at == email.length() - 1) {
             throw new IllegalArgumentException("올바른 이메일 형식이 아닙니다.");
+        }
+
+        // 제목 길이 검증 (예: 최대 50자)
+        if (title.length() > TITLE_MAX_LEN) {
+            throw new IllegalArgumentException("제목은 최대 " + TITLE_MAX_LEN + "자까지 입력 가능합니다.");
         }
 
         // 문의 내용 길이 검증
@@ -96,6 +104,7 @@ public class InquiriesService implements InquiriesUseCase {
                 "문의가 등록되었습니다."
         );
     }
+
 
     // ─────────────────────────────────────────────────────────
     // 2) listInquiries: 문의 목록 조회 
