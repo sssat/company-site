@@ -46,8 +46,7 @@ public class Inquiry {
     private String title;
 
     // 문의글 내용 (MESSAGE)
-    @Lob
-    @Column(name = "MESSAGE", nullable = false)
+    @Column(name = "MESSAGE", nullable = false, columnDefinition = "TEXT")
     private String message;
 
     // 문의글 제출 일시
