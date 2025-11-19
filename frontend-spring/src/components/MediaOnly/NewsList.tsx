@@ -11,7 +11,11 @@ import {
   type NewsOrder,
   type NewsCategoryFilter,
 } from "../../api/newsApi";
-const DEFAULT_THUMB = "/src/assets/news/empty_thumbnail.jpg";
+
+// 썸네일 기본 이미지 (Vite 번들에 포함되도록 import 사용)
+import defaultThumb from "../../assets/news/empty_thumbnail.jpg";
+
+const DEFAULT_THUMB = defaultThumb;
 
 /* =========================== 타입 =========================== */
 
@@ -44,6 +48,37 @@ function formatDateYmd(iso: string): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}.${m}.${day}`;
 }
+
+// 컴포넌트 바깥(파일 상단)에 하나 추가
+function getDeleteErrorMessage(err: unknown): string {
+  // 1) Axios 에러(response.data.message / detail) 우선
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "response" in err &&
+    (err as { response?: unknown }).response &&
+    typeof (err as { response: { data?: unknown } }).response.data === "object" &&
+    (err as { response: { data: { message?: unknown; detail?: unknown } } }).response.data !== null
+  ) {
+    const data = (err as {
+      response: { data: { message?: unknown; detail?: unknown } };
+    }).response.data;
+    if (typeof data.message === "string") return data.message;
+    if (typeof data.detail === "string") return data.detail;
+  }
+
+  // 2) 일반 Error 객체
+  if (err instanceof Error && typeof err.message === "string") {
+    return err.message;
+  }
+
+  // 3) 문자열로 던진 경우
+  if (typeof err === "string") return err;
+
+  // 4) 그 외
+  return "삭제 중 오류가 발생했습니다.";
+}
+
 
 /* =========================== 컴포넌트 =========================== */
 
@@ -145,7 +180,7 @@ export default function NewsList() {
         setItems(res.items);
         setTotal(res.total);
         setSelected(new Set<number>()); // 페이지 이동/필터 변경 시 선택 초기화
-        setReady(true);                  // 첫 로드 완료
+        setReady(true); // 첫 로드 완료
       } catch {
         if (aborted) return;
         setErrorMsg("목록을 불러오는 중 오류가 발생했습니다.");
@@ -205,7 +240,7 @@ export default function NewsList() {
     nav(`/media/${item.news_seq}/edit`);
   };
 
-  const onDelete = async () => {
+    const onDelete = async () => {
     if (selected.size === 0) {
       alert("삭제할 항목을 선택하세요.");
       return;
@@ -215,10 +250,12 @@ export default function NewsList() {
     try {
       const seqs = Array.from(selected);
       await Promise.all(seqs.map((seq) => deleteNews(seq)));
+
       setItems((prev) => prev.filter((n) => !selected.has(n.news_seq)));
       setTotal((prev) => Math.max(0, prev - seqs.length));
       clearSelection();
       setSelectMode(false);
+
       if (items.length - seqs.length <= 0 && clampedPage > 1) {
         setPage(clampedPage - 1);
       } else {
@@ -233,8 +270,9 @@ export default function NewsList() {
         setItems(res.items);
         setTotal(res.total);
       }
-    } catch {
-      alert("삭제 중 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      console.error("delete error", err);
+      alert(getDeleteErrorMessage(err));
     }
   };
 
@@ -299,10 +337,14 @@ export default function NewsList() {
         <div className={`${styles.grid} ${selectMode ? styles.selectMode : ""}`}>
           {items.map((n) => {
             const checked = selected.has(n.news_seq);
-            const img = n.thumbnail_url ?? n.image_url ?? DEFAULT_THUMB;
+            // 썸네일 → 본문 이미지 → 기본 이미지 순으로 선택
+            const img = n.thumbnail_url || n.image_url || DEFAULT_THUMB;
             const dateYmd = formatDateYmd(n.published_at);
             return (
-              <article key={n.news_seq} className={`${styles.card} ${checked ? styles.checked : ""}`}>
+              <article
+                key={n.news_seq}
+                className={`${styles.card} ${checked ? styles.checked : ""}`}
+              >
                 {/* 선택 모드에선 링크 이동을 막음 */}
                 <Link
                   to={{ pathname: `/media/${n.news_seq}`, search: loc.search }}
