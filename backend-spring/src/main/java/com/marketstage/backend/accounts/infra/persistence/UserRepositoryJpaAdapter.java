@@ -145,7 +145,7 @@ public class UserRepositoryJpaAdapter implements UserRepository {
         List<Predicate> predicates = buildPredicates(cb, root, roleHint, terms);
         cq.select(root).distinct(true).where(predicates.toArray(new Predicate[0]));
         // 정렬 기준은 필요에 따라 변경 가능 (예: joinedAt desc 등)
-        cq.orderBy(cb.asc(root.get("userSeq")));
+        cq.orderBy(cb.desc(root.get("userSeq"))); 
 
         TypedQuery<User> query = em.createQuery(cq);
         if (offset > 0) query.setFirstResult(offset);
@@ -166,26 +166,30 @@ public class UserRepositoryJpaAdapter implements UserRepository {
     ) {
         List<Predicate> list = new ArrayList<>();
 
+        // 1) 역할 힌트(USER/ADMIN/SUPER_ADMIN) -> grade_code 필터
         if (roleHint != null) {
             Path<Byte> grade = root.get("level").get("gradeCode");
             list.add(cb.equal(grade, roleHint.byteValue()));
         }
 
+        // 2) 일반 검색어: 이름 / 아이디만 매칭 (이메일 제외)
         if (terms != null) {
             for (String t : terms) {
                 if (t == null) continue;
                 String term = t.trim().toLowerCase();
                 if (term.isEmpty()) continue;
 
-                Expression<String> userId = cb.lower(root.get("userId"));
+                Expression<String> userId   = cb.lower(root.get("userId"));
                 Expression<String> userName = cb.lower(root.get("userName"));
-                Expression<String> email = cb.lower(root.get("email"));
+                // Expression<String> email = cb.lower(root.get("email")); // 제거
 
                 String like = "%" + term + "%";
+
+                // 이름 / 아이디만 LIKE 검색
                 Predicate or = cb.or(
                         cb.like(userId, like),
-                        cb.like(userName, like),
-                        cb.like(email, like)
+                        cb.like(userName, like)
+                        // , cb.like(email, like)  // 주석 처리
                 );
                 list.add(or);
             }
