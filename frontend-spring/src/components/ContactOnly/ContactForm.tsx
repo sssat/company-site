@@ -80,6 +80,7 @@ export default function ContactForm({
 
   const NAME_MIN_LEN = 2;
   const NAME_MAX_LEN = 50;
+  const NAME_REGEX = /^[A-Za-z가-힣\s]+$/; // 한글/영문 + 공백만 허용
 
   const validate = (v: FormState) => {
     const next: Partial<FormState> = {};
@@ -91,7 +92,11 @@ export default function ContactForm({
     // 이름 검증
     if (!name) {
       next.name = "이름을 입력해주세요.";
-    } else if (name.length < NAME_MIN_LEN || name.length > NAME_MAX_LEN) {
+    } else if (
+      name.length < NAME_MIN_LEN ||
+      name.length > NAME_MAX_LEN ||
+      !NAME_REGEX.test(name)
+    ) {
       next.name = `이름은 ${NAME_MIN_LEN}자 이상 ${NAME_MAX_LEN}자 이하의 한글/영문과 공백만 사용할 수 있습니다.`;
     }
 
@@ -115,7 +120,6 @@ export default function ContactForm({
     return next;
   };
 
-
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const nextErrors = validate(values);
@@ -138,7 +142,14 @@ export default function ContactForm({
       setDone(true);
       setValues({ name: "", email: "", subject: "", message: "" });
     } catch (err: unknown) {
-      setGeneralError(extractErrorMessage(err));
+      const msg = extractErrorMessage(err);
+
+      // 서버가 준 에러가 이름 관련이면 이름 필드 에러로 보내기
+      if (msg.startsWith("이름은")) {
+        setErrors((prev) => ({ ...prev, name: msg }));
+      } else {
+        setGeneralError(msg); // 그 외는 기존처럼 폼 하단에 표시
+      }
     } finally {
       setSubmitting(false);
     }
@@ -167,12 +178,16 @@ export default function ContactForm({
             <h2 className={styles.cardTitle}>우리 영업팀에 문의하세요</h2>
 
             <form className={styles.form} onSubmit={onSubmit} noValidate>
-              <label className={styles.label} htmlFor="name">성명</label>
+              <label className={styles.label} htmlFor="name">
+                성명
+              </label>
               <input
                 id="name"
                 name="name"
                 type="text"
-                className={`${styles.input} ${errors.name ? styles.invalid : ""}`}
+                className={`${styles.input} ${
+                  errors.name ? styles.invalid : ""
+                }`}
                 placeholder="이름을 입력해주세요"
                 value={values.name}
                 onChange={onChange}
@@ -180,12 +195,16 @@ export default function ContactForm({
               />
               {errors.name && <p className={styles.error}>{errors.name}</p>}
 
-              <label className={styles.label} htmlFor="email">이메일</label>
+              <label className={styles.label} htmlFor="email">
+                이메일
+              </label>
               <input
                 id="email"
                 name="email"
                 type="email"
-                className={`${styles.input} ${errors.email ? styles.invalid : ""}`}
+                className={`${styles.input} ${
+                  errors.email ? styles.invalid : ""
+                }`}
                 placeholder="이메일을 입력해주세요"
                 value={values.email}
                 onChange={onChange}
@@ -193,34 +212,52 @@ export default function ContactForm({
               />
               {errors.email && <p className={styles.error}>{errors.email}</p>}
 
-              <label className={styles.label} htmlFor="subject">제목</label>
+              <label className={styles.label} htmlFor="subject">
+                제목
+              </label>
               <input
                 id="subject"
                 name="subject"
                 type="text"
-                className={`${styles.input} ${errors.subject ? styles.invalid : ""}`}
+                className={`${styles.input} ${
+                  errors.subject ? styles.invalid : ""
+                }`}
                 placeholder="제목을 입력해주세요"
                 value={values.subject}
                 onChange={onChange}
               />
-              {errors.subject && <p className={styles.error}>{errors.subject}</p>}
+              {errors.subject && (
+                <p className={styles.error}>{errors.subject}</p>
+              )}
 
-              <label className={styles.label} htmlFor="message">메시지</label>
+              <label className={styles.label} htmlFor="message">
+                메시지
+              </label>
               <textarea
                 id="message"
                 name="message"
                 rows={6}
-                className={`${styles.textarea} ${errors.message ? styles.invalid : ""}`}
+                className={`${styles.textarea} ${
+                  errors.message ? styles.invalid : ""
+                }`}
                 placeholder="메시지를 입력해주세요 (50자 이상)"
                 value={values.message}
                 onChange={onChange}
               />
-              {errors.message && <p className={styles.error}>{errors.message}</p>}
+              {errors.message && (
+                <p className={styles.error}>{errors.message}</p>
+              )}
 
               {/* 서버에서 온 에러 메시지 */}
-              {generalError && <p className={styles.error}>{generalError}</p>}
+              {generalError && (
+                <p className={styles.error}>{generalError}</p>
+              )}
 
-              <button className={styles.button} type="submit" disabled={submitting}>
+              <button
+                className={styles.button}
+                type="submit"
+                disabled={submitting}
+              >
                 {submitting ? "전송 중..." : "제출하기"}
               </button>
 
