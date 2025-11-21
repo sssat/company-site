@@ -97,13 +97,14 @@
   border: 1px solid #d1d5db;
   outline: none;
   background: #fff;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 .search:focus {
   border-color: #9ca3af;
   box-shadow: 0 0 0 3px rgba(156,163,175,.25);
 }
 
-/* ▶ 검색 버튼: 알약 모양 + 진한 테두리 */
+/* 검색 버튼: 알약 모양 + 진한 테두리 */
 .searchBtn {
   padding: 10px 16px;
   border-radius: 8px;
@@ -113,6 +114,7 @@
   font-weight: 800;
   cursor: pointer;
   line-height: 1;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease, transform .1s ease;
 }
 .searchBtn:hover { background: #f9fafb; }
 .searchBtn:active { transform: translateY(1px); }
@@ -133,6 +135,7 @@
   border: 1px solid #e5e7eb;
   cursor: pointer;
   font-weight: 800;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 .pagerBtn:disabled { opacity: .5; cursor: not-allowed; }
 .current {
@@ -145,4 +148,90 @@
 @media (max-width: 640px) {
   .title { font-size: 26px; }
   .totalCount { font-size: 13px; }
+}
+
+/* ===== 다크 모드 ===== */
+@media (prefers-color-scheme: dark) {
+  .wrap {
+    color: #e5e7eb;
+  }
+
+  .title {
+    color: #f9fafb;
+  }
+
+  .totalCount {
+    color: #9ca3af;
+  }
+
+  .table {
+    border-color: #1f2937;
+    background: #020617;
+  }
+
+  .table thead tr {
+    background: #020617;
+  }
+
+  .table th, .table td {
+    border-bottom-color: #111827;
+  }
+
+  .table tbody tr:hover {
+    background: #111827;
+  }
+
+  .tdTitle {
+    color: #e5e7eb;
+  }
+
+  .titleBtn {
+    color: #e5e7eb;
+  }
+
+  .empty {
+    color: #9ca3af;
+  }
+
+  .search {
+    background: #020617;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+
+  .search::placeholder {
+    color: #6b7280;
+  }
+
+  .search:focus {
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 3px rgba(148,163,184,.45);
+  }
+
+  .searchBtn {
+    background: #020617;
+    border-color: #4b5563;
+    color: #e5e7eb;
+  }
+
+  .searchBtn:hover {
+    background: #111827;
+  }
+
+  .pagerBtn,
+  .pagerNum {
+    background: #020617;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+
+  .pagerBtn:disabled {
+    opacity: .4;
+  }
+
+  .current {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+  }
 }

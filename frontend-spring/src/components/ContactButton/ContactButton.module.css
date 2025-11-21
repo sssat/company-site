@@ -1,3 +1,25 @@
+/* ContactButton.module.css */
+
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --cta-bg: #3ba1ff;
+  --cta-text: #ffffff;
+  --cta-outline: #94caff;
+}
+
+/* 다크모드: 흰 배경 + 검정 글씨 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cta-bg: #ffffff;
+    --cta-text: #111827;
+    --cta-outline: #e5e7eb;
+  }
+}
+
 /* CTA 래퍼 */
 .ctaWrap {
   /* 데스크톱에선 여유, 모바일에선 자동 축소 */
@@ -31,8 +53,8 @@
   line-height: 1;
 
   border-radius: 12px;
-  background: #3ba1ff;
-  color: #fff;
+  background: var(--cta-bg);
+  color: var(--cta-text);
   font-weight: 700;
   text-decoration: none;
   box-shadow: 0 8px 28px rgba(17, 24, 39, 0.08);
@@ -40,14 +62,14 @@
   /* 모바일 터치/텍스트 가독성 보강 */
   touch-action: manipulation;
   user-select: none;
-  -webkit-text-fill-color: #fff; /* iOS에서 색 반전 방지 */
+  -webkit-text-fill-color: var(--cta-text); /* iOS에서 색 반전 방지 */
 }
 
 /* 인터랙션 */
 .cta:hover   { transform: translateY(-1px); }
 .cta:active  { transform: translateY(0); }
 .cta:focus-visible {
-  outline: 2px solid #94caff;
+  outline: 2px solid var(--cta-outline);
   outline-offset: 2px;
 }
 

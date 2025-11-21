@@ -1,9 +1,43 @@
 /* src/components/TeamOnly/People.module.css */
+
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  /* 페이지 배경/텍스트는 전역(body)에서 가져오도록 여기선 정의하지 않음 */
+
+  --team-card-border: #e5e7eb;
+  --team-card-bg: #ffffff;
+  --team-card-shadow-hover: rgba(0, 0, 0, 0.08);
+
+  --team-blurb-text: #374151;
+  --team-badge-text: #111827;
+}
+
+/* 시스템 다크모드일 때 자동 적용 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 페이지 배경/텍스트는 전역 다크 테마에서 처리 */
+
+    --team-card-border: #1f2937;
+    --team-card-bg: #020617;
+    --team-card-shadow-hover: rgba(0, 0, 0, 0.6);
+
+    --team-blurb-text: #e5e7eb;
+    --team-badge-text: #f9fafb;
+  }
+}
+
+/* ─────────────────────────────────────────
+   Team People
+   ───────────────────────────────────────── */
+
 /* 페이지 기본 */
 .page {
   min-height: auto;
-  background: #ffffff;
-  color: #111827;
+  /* background / color 지정 제거 → 전역(body) 색을 그대로 사용 */
 }
 
 /* 인트로: 좌(제목) / 중간(문구) / 우(여백) */
@@ -66,16 +100,18 @@
 
 /* 개별 카드 */
 .card {
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--team-card-border);
   border-radius: 14px;
   padding: 14px;
-  background: #fff;
+  background: var(--team-card-bg);
 
   opacity: 0;
   transform: translateY(40px);
   transition: opacity 0.75s ease-out, transform 0.75s ease-out, box-shadow 0.2s;
 }
-.card:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.08); }
+.card:hover {
+  box-shadow: 0 10px 24px var(--team-card-shadow-hover);
+}
 
 /* 썸네일 */
 .thumb {
@@ -97,7 +133,7 @@
   font-family: "Noto Sans KR", sans-serif;
   font-weight: 600;
   font-size: 14px;
-  color: #374151;
+  color: var(--team-blurb-text);
   margin: 6px 0 10px;
 }
 
@@ -105,7 +141,7 @@
   font-family: "Poppins", "Noto Sans KR", sans-serif;
   font-weight: 800;
   font-size: 14px;
-  color: #111827;
+  color: var(--team-badge-text);
   border-radius: 8px;
   padding: 8px 12px;
   width: 100%;
@@ -133,8 +169,16 @@
     text-align: center;
     gap: 12px;
   }
-  .h1 { font-size: clamp(24px, 7vw, 36px); grid-column: auto; text-align: center; }
-  .kicker { font-size: clamp(15px, 4.6vw, 18px); margin-top: 6px; grid-column: auto; }
+  .h1 {
+    font-size: clamp(24px, 7vw, 36px);
+    grid-column: auto;
+    text-align: center;
+  }
+  .kicker {
+    font-size: clamp(15px, 4.6vw, 18px);
+    margin-top: 6px;
+    grid-column: auto;
+  }
 }
 
 /* 모션 저감 선호 */

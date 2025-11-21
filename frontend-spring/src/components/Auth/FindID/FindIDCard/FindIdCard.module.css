@@ -11,11 +11,16 @@
   justify-content: center;
 }
 
+/* 카드 */
 .card {
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,.06);
   padding: 28px 24px 20px;
+
+  /* 다크모드에서도 카드 안은 항상 라이트 톤 */
+  color: #111827;
+  color-scheme: light;
 }
 
 .card * { box-sizing: border-box; }
@@ -41,6 +46,7 @@
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
+  color: #111827;
 }
 
 .error {
@@ -58,6 +64,7 @@
   border-radius: 8px;
   background: #3ba1ff;
   color: #fff;
+  -webkit-text-fill-color: #fff; /* iOS 다크모드 색 반전 방지 */
   font-weight: 700;
 }
 .submit:disabled { opacity: .6; }
@@ -76,3 +83,13 @@
   text-decoration: none;
 }
 .link:hover { text-decoration: underline; }
+
+/* 다크모드에서 링크 컬러 보정 */
+@media (prefers-color-scheme: dark) {
+  .link {
+    color: #e5e7eb;
+  }
+  .link:hover {
+    color: #ffffff;
+  }
+}

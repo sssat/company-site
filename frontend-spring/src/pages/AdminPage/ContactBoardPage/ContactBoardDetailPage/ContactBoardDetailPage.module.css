@@ -117,6 +117,7 @@
   cursor: pointer;
   font-weight: 800;
   color: #111827;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 .btn:hover { background: #e5e7eb; }
 .btn:focus-visible {
@@ -143,5 +144,55 @@
   .head {
     border-right: 0;
     border-bottom: 1px solid #eef2f7;
+  }
+}
+
+/* ===== 다크 모드 ===== */
+@media (prefers-color-scheme: dark) {
+  .wrap {
+    color: #e5e7eb;
+  }
+
+  .title {
+    color: #f9fafb;
+  }
+
+  .meta {
+    border-color: #1f2937;
+    background: #020617;
+  }
+
+  .row {
+    border-bottom-color: #111827;
+  }
+
+  .head {
+    background: #020617;
+    color: #e5e7eb;
+    border-right-color: #111827;
+  }
+
+  .body {
+    color: #e5e7eb;
+  }
+
+  .messageBox {
+    border-color: #1f2937;
+    background: #020617;
+    color: #e5e7eb;
+  }
+
+  .btn {
+    background: #020617;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+
+  .btn:hover {
+    background: #111827;
+  }
+
+  .notfound {
+    color: #9ca3af;
   }
 }

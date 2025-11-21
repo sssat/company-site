@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: #fff;
+  /* background: #fff;  ← 다크 모드와 충돌하므로 제거 */
 }
 
 /* 카드와 링크바를 감싸는 스택 컨테이너 */
@@ -19,7 +19,7 @@
   /* 카드 폭/높이 제어 변수 */
   --card-width: 420px;
   --card-min-h: 320px;        /* 최소 높이 (예: 320px) */
-  --card-h: auto;         /* 고정 높이 (예: 420px). 기본은 자동 높이 */
+  --card-h: auto;             /* 고정 높이 (예: 420px). 기본은 자동 높이 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -40,8 +40,11 @@
   border-radius: 12px;
   padding: 20px 18px 14px;
   box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
-}
 
+  /* 카드 안은 항상 라이트 톤 */
+  color: #111827;
+  color-scheme: light;
+}
 
 /* 로고 (카드 상단 중앙) */
 .logo {
@@ -141,3 +144,23 @@
 @media (max-width: 360px) {
   .logo { width: 144px; height: 44px; }
 }
+
+/* 다크모드에서 링크/구분선 색 보정 */
+@media (prefers-color-scheme: dark) {
+  .linksBar {
+    color: #e5e7eb;           /* 기본 텍스트 톤 */
+  }
+
+  .link {
+    color: #e5e7eb;           /* 링크를 밝게 */
+  }
+
+  .link:hover {
+    color: #ffffff;           /* hover 시 더 밝게 */
+  }
+
+  .sep {
+    color: #9ca3af;           /* 구분선은 살짝 옅게 */
+  }
+}
+

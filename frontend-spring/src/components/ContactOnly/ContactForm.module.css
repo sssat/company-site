@@ -1,3 +1,51 @@
+/* src/components/ContactOnly/ContactSection.module.css */
+
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크 기본값)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --contact-title-color: #111827;
+
+  --contact-adminLink-border: #d1d5db;
+  --contact-adminLink-bg: #f9fafb;
+  --contact-adminLink-bg-hover: #f3f4f6;
+  --contact-adminLink-text: #374151;
+
+  /* 폼/카드 라이트 테마 (다크모드에서도 그대로 사용) */
+  --contact-card-bg: #f3f4f6;
+  --contact-card-border: #e5e7eb;
+  --contact-card-shadow-1: rgba(0, 0, 0, 0.02);
+  --contact-card-shadow-2: rgba(0, 0, 0, 0.06);
+  --contact-cardTitle-color: #374151;
+
+  --contact-label-color: #374151;
+  --contact-input-bg: #ffffff;
+  --contact-input-text: #111827;
+  --contact-input-border: #d1d5db;
+  --contact-input-focus-border: #9ca3af;
+  --contact-input-focus-shadow: rgba(156, 163, 175, 0.25);
+
+  --contact-button-bg: #64676c;
+  --contact-button-text: #ffffff;
+
+  --contact-success-text: #166534;
+}
+
+/* 시스템 다크모드일 때:
+   섹션 제목(문의하기)만 밝게, 폼/카드는 오버라이드 안 해서 그대로 하얀색 유지 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --contact-title-color: #f9fafb;
+    /* admin 링크/카드는 라이트 값 그대로 사용 */
+  }
+}
+
+/* ─────────────────────────────────────────
+   섹션 레이아웃
+   ───────────────────────────────────────── */
+
 /* 섹션 배치 */
 .section {
   scroll-margin-top: 196px; /* 문의하기 버튼 누르고 스크롤 될때 헤더에 가려지지 않도록 하기 위함 */
@@ -38,14 +86,16 @@
   height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-  color: #374151;
+  border: 1px solid var(--contact-adminLink-border);
+  background: var(--contact-adminLink-bg);
+  color: var(--contact-adminLink-text);
   font-weight: 800;
   font-size: 12px;
   text-decoration: none;
 }
-.adminLink:hover { background: #f3f4f6; }
+.adminLink:hover {
+  background: var(--contact-adminLink-bg-hover);
+}
 
 /* 제목: 카드 왼쪽 상단 기준, 간격 넉넉히 */
 .title {
@@ -53,21 +103,24 @@
   font-weight: 800;
   font-size: 38px;
   margin: 0 0 32px 0;        /* 제목-폼 간격 (원하면 40~48로) */
+  color: var(--contact-title-color);
 }
 
 /* 카드 */
 .card {
   width: 100%;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--contact-card-bg);
+  border: 1px solid var(--contact-card-border);
   border-radius: 12px;
-  box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 6px 16px rgba(0,0,0,.06);
+  box-shadow:
+    0 1px 0 var(--contact-card-shadow-1),
+    0 6px 16px var(--contact-card-shadow-2);
   padding: 24px;
 }
 .cardTitle {
   font-weight: 800;
   font-size: 24px;
-  color: #374151;
+  color: var(--contact-cardTitle-color);
   margin: 4px 0 18px;
   margin-bottom: 30px;  /* 타이틀 - 성명 칸 간격 */
 }
@@ -81,22 +134,25 @@
 .label {
   font-size: 13px;
   font-weight: 700;
-  color: #374151;
+  color: var(--contact-label-color);
 }
-.input, .textarea {
+.input,
+.textarea {
   font-family: "Noto Sans KR", sans-serif;
   font-size: 14px;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--contact-input-border);
   border-radius: 8px;
   outline: none;
-  background: white;
+  background: var(--contact-input-bg);
+  color: var(--contact-input-text);
   transition: box-shadow .15s ease, border-color .15s ease;
   width: 100%;
 }
-.input:focus, .textarea:focus {
-  border-color: #9ca3af;
-  box-shadow: 0 0 0 4px rgba(156,163,175,.25);
+.input:focus,
+.textarea:focus {
+  border-color: var(--contact-input-focus-border);
+  box-shadow: 0 0 0 4px var(--contact-input-focus-shadow);
 }
 .textarea { resize: vertical; }
 
@@ -114,8 +170,8 @@
   padding: 12px 16px;
   border: none;
   border-radius: 10px;
-  background: #64676c;
-  color: #fff;
+  background: var(--contact-button-bg);
+  color: var(--contact-button-text);
   font-weight: 800;
   cursor: pointer;
   transition: transform .06s ease, filter .2s ease;
@@ -128,11 +184,16 @@
 .success {
   margin-top: 10px;
   font-size: 14px;
-  color: #166534;
+  color: var(--contact-success-text);
 }
 
 /* 반응형 */
 @media (max-width: 768px) {
   .title { font-size: 26px; }
   .wrap  { --form-width: 100%; }
+}
+
+/* 모션 저감 선호 */
+@media (prefers-reduced-motion: reduce) {
+  .section { transition: none; transform: none; }
 }

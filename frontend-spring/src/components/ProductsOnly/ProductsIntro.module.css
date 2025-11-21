@@ -1,5 +1,27 @@
 /* src/components/ProductsOnly/ProductsIntro.module.css */
 
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --productsIntro-title-color: #0f172a;
+  --productsIntro-subtitle-color: #4b5563;
+}
+
+/* 시스템 다크모드일 때 자동 적용 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --productsIntro-title-color: #f9fafb;
+    --productsIntro-subtitle-color: #9ca3af;
+  }
+}
+
+/* ─────────────────────────────────────────
+   Products Intro
+   ───────────────────────────────────────── */
+
 /* 페이지 기본 */
 .page {
   /* 모바일/좁은 화면 과도 여백 방지 */
@@ -38,6 +60,7 @@
   margin: 0 0 clamp(14px, 3.4vw, 24px);
   word-break: keep-all;       /* 한글 단어 분리 방지 */
   overflow-wrap: anywhere;    /* 긴 영문 단어 대비 */
+  color: var(--productsIntro-title-color);
 }
 
 /* 서브 카피 */
@@ -46,7 +69,7 @@
   font-weight: 500;
   font-size: clamp(13px, 2.4vw, 16px);
   line-height: 1.8;
-  color: #4b5563;
+  color: var(--productsIntro-subtitle-color);
   text-align: center;
   margin: 0;
   max-width: 72ch;            /* 가독성 위한 줄 길이 제한 */

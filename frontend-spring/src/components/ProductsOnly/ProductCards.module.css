@@ -1,5 +1,27 @@
 /* src/components/ProductsOnly/ProductsCard.module.css */
 
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --products-desc-color: #374151;     /* 설명 텍스트 */
+  --products-slogan-color: #111827;   /* 슬로건 텍스트 */
+}
+
+/* 시스템 다크모드일 때 자동 적용 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --products-desc-color: #d1d5db;     /* 설명: 밝은 회색 */
+    --products-slogan-color: #e5e7eb;   /* 슬로건: 거의 흰색 */
+  }
+}
+
+/* ─────────────────────────────────────────
+   Products 카드
+   ───────────────────────────────────────── */
+
 /* 컨테이너 */
 .wrap {
   max-width: 1100px;
@@ -78,7 +100,7 @@
   font-family: "Noto Sans KR", sans-serif;
   font-weight: 500;
   font-size: clamp(16px, 3.4vw, 22px);
-  color: #374151;
+  color: var(--products-desc-color);
   margin: 0 0 6px;
   line-height: 1.75;
   max-width: 70ch;                 /* 가독성 향상 */
@@ -86,12 +108,13 @@
 .desc p { margin: 0 0 6px; }
 .desc strong { font-weight: 800; }
 
-/* 슬로건(영문) – 각 카드에서 개별 색상 지정 */
+/* 슬로건(영문) – 각 카드에서 개별 색상 지정 가능 */
 .slogan {
   font-family: "Poppins", "Noto Sans KR", sans-serif;
   font-weight: 700;
   font-size: clamp(16px, 3.4vw, 22px);
   margin-top: 25px;
+  color: var(--products-slogan-color);
 }
 
 /* 모션 저감 선호 시 애니메이션 최소화 */

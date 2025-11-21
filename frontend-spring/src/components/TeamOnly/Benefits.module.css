@@ -2,6 +2,38 @@
 /* 구글 폰트(스크립트 느낌) 로드 */
 @import url('https://fonts.googleapis.com/css2?family=Parisienne&family=Great+Vibes&family=Dancing+Script:wght@400;600&display=swap');
 
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --benefits-head-title-color: #111827;
+
+  --benefits-item-border: #f1f5f9;
+
+  --benefits-iconCol-text: #111827;
+  --benefits-engWord-color: #e98a05;
+  --benefits-koLabel-color: #111827;
+
+  --benefits-bullets-color: #374151;
+}
+
+/* 시스템 다크모드일 때 자동 적용 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --benefits-head-title-color: #f9fafb;
+
+    --benefits-item-border: #1f2937;
+
+    --benefits-iconCol-text: #f9fafb;
+    --benefits-engWord-color: #fdba74;   /* 살짝 더 밝은 오렌지 */
+    --benefits-koLabel-color: #e5e7eb;
+
+    --benefits-bullets-color: #e5e7eb;
+  }
+}
+
 /* ───────── 섹션 전체 ───────── */
 .section {
   padding: 0;
@@ -27,6 +59,7 @@
   font-size: clamp(28px, 5.4vw, 48px);
   margin: 0;
   line-height: 1.15;
+  color: var(--benefits-head-title-color);
 }
 
 /* ───────── 리스트 컨테이너 ───────── */
@@ -44,7 +77,7 @@
   grid-template-columns: 260px 1fr; /* 좌측 폭 넉넉하게 */
   gap: clamp(16px, 3vw, 24px);
   padding: clamp(18px, 3.4vw, 26px) 0;
-  border-bottom: 2px solid #f1f5f9;
+  border-bottom: 2px solid var(--benefits-item-border);
 
   opacity: 0;
   transform: translateY(32px);
@@ -57,7 +90,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  color: #111827;
+  color: var(--benefits-iconCol-text);
   min-width: 0; /* 긴 텍스트로 인한 밀림 방지 */
 }
 
@@ -94,7 +127,7 @@
   font-size: clamp(24px, 4.2vw, 34px);
   line-height: 1;
   letter-spacing: 0.4px;
-  color: #e98a05;
+  color: var(--benefits-engWord-color);
   white-space: nowrap;           /* 너무 길면 한 줄 유지 */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -104,7 +137,7 @@
   font-size: clamp(15px, 2.4vw, 18px);
   font-weight: 700;
   line-height: 1.2;
-  color: #111827;
+  color: var(--benefits-koLabel-color);
 }
 
 /* 우측: 불릿 */
@@ -114,7 +147,7 @@
   font-family: "Noto Sans KR", sans-serif;
   font-size: clamp(14px, 2.3vw, 15px);
   line-height: 1.9;
-  color: #374151;
+  color: var(--benefits-bullets-color);
   word-break: keep-all;
   overflow-wrap: anywhere;
 }

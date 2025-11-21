@@ -1,8 +1,44 @@
 /* src/components/Auth/SignUp/SignUpCard/SignUpCard.module.css  */
+
 :root {
+  /* 공용 치수 토큰 */
   --input-h: 44px;
   --input-br: 10px;
   --short-input-w: 72%;
+
+  /* 색상 토큰 (라이트 기본) */
+  --signup-card-bg: #ffffff;
+  --signup-label-color: #111827;
+
+  --signup-input-bg: #ffffff;
+  --signup-input-border: #e5e7eb;
+  --signup-input-text: #111827;
+
+  --signup-sidebtn-bg: #f3f4f6;
+  --signup-sidebtn-border: #e5e7eb;
+  --signup-sidebtn-text: #111827;
+
+  --signup-submit-bg: #3ba1ff;
+  --signup-submit-text: #ffffff;
+}
+
+/* 시스템 다크모드일 때도 카드/입력은 라이트 톤 유지 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --signup-card-bg: #ffffff;
+    --signup-label-color: #111827;
+
+    --signup-input-bg: #ffffff;
+    --signup-input-border: #d1d5db;
+    --signup-input-text: #111827;
+
+    --signup-sidebtn-bg: #f3f4f6;
+    --signup-sidebtn-border: #d1d5db;
+    --signup-sidebtn-text: #111827;
+
+    --signup-submit-bg: #3ba1ff;
+    --signup-submit-text: #ffffff;
+  }
 }
 
 .section {
@@ -29,10 +65,12 @@
   --_h-min: var(--card-min-height, auto);
   --_h-max: var(--card-max-height, none);
 
-  background: #fff;
+  background: var(--signup-card-bg);
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,.06);
   padding: 24px;
+
+  color-scheme: light;
 
   height: var(--_h);
   min-height: var(--_h-min);
@@ -64,7 +102,7 @@
 /* 라벨 텍스트 */
 .label {
   font-size: 14px;
-  color: #111827;
+  color: var(--signup-label-color);
   font-weight: 600;
 }
 
@@ -73,10 +111,11 @@
 .select {
   width: 100%;
   height: var(--input-h);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--signup-input-border);
   border-radius: var(--input-br);
   padding: 0 12px;
-  background: #fff;
+  background: var(--signup-input-bg);
+  color: var(--signup-input-text);
 }
 
 /* 아이디/이메일: 입력칸(좌) + 버튼(우) 바깥 배치 */
@@ -93,9 +132,10 @@
   height: var(--input-h);
   padding: 0 12px;
   white-space: nowrap;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--signup-sidebtn-border);
   border-radius: var(--input-br);
-  background: #f3f4f6;
+  background: var(--signup-sidebtn-bg);
+  color: var(--signup-sidebtn-text);
   cursor: pointer;
 }
 .sideBtn:disabled { opacity: .5; cursor: not-allowed; }
@@ -105,10 +145,19 @@
 .adornField { position: relative; min-width: 0; }
 .hasRightBtn { padding-right: 108px; }
 .adornBtn {
-  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
-  height: calc(var(--input-h) - 8px); padding: 0 10px;
-  border: 1px solid #e5e7eb; border-radius: calc(var(--input-br) - 2px);
-  background: #f3f4f6; font-size: 12.5px; line-height: 1; white-space: nowrap;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  height: calc(var(--input-h) - 8px);
+  padding: 0 10px;
+  border: 1px solid var(--signup-sidebtn-border);
+  border-radius: calc(var(--input-br) - 2px);
+  background: var(--signup-sidebtn-bg);
+  font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--signup-sidebtn-text);
 }
 
 /* 생년월일 3분할 */
@@ -125,6 +174,19 @@
   gap: 8px;
   font-size: 12px;
   margin: 6px 0 8px;
+  color: var(--signup-label-color);      /* 다크모드에서도 진한 글자색 고정 */
+}
+
+.terms input[type="checkbox"] {
+  accent-color: #3ba1ff;        /* 체크 색(파란색) 유지 */
+  background-color: #ffffff;    /* 항상 흰색 박스 배경 */
+  border: 1px solid #d1d5db;    /* 흰 배경에서 보이도록 테두리 */
+}
+
+/* 혹시 링크로 감쌌을 경우 대비 */
+.terms a {
+  color: var(--signup-label-color);
+  text-decoration: underline;
 }
 
 /* 제출 버튼 */
@@ -133,8 +195,9 @@
   height: 48px;
   border: 0;
   border-radius: 12px;
-  background: #3ba1ff;
-  color: #fff;
+  background: var(--signup-submit-bg);
+  color: var(--signup-submit-text);
+  -webkit-text-fill-color: var(--signup-submit-text); /* iOS 다크모드 색 반전 방지 */
   font-weight: 600;
 }
 

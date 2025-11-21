@@ -1,4 +1,58 @@
 /* src/components/DirectionsSection/DirectionsSection.module.css  */
+
+/* ─────────────────────────────────────────
+   공통 색상 토큰 (라이트/다크 공용)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --dir-border-color: #e5e7eb;           /* 카드/지도/버튼 테두리 */
+  --dir-map-border-color: #e5e7eb;       /* 지도 래퍼 테두리 */
+  --dir-bg-panel: #ffffff;               /* 버튼/패널 배경 */
+  --dir-bg-panel-soft: #f9fafb;          /* hover용 부드러운 배경 */
+  --dir-text-main: #0f172a;              /* 주요 텍스트 (주소/전화 등) */
+  --dir-text-sub: #4b5563;               /* 보조 텍스트가 필요할 때 */
+
+  --dir-refresh-bg: #ffffffea;           /* 새로고침 버튼 배경 */
+  --dir-refresh-hover-bg: #ffffff;       /* 새로고침 hover 배경 */
+
+  --dir-actions-btn-bg: #ffffff;         /* 지도 아래 액션 버튼 배경 */
+  --dir-actions-btn-hover-bg: #f9fafb;   /* 액션 버튼 hover 배경 */
+  --dir-actions-btn-text: #0f172a;       /* 액션 버튼 텍스트 색 */
+
+  --dir-badge-bg: #04a8e9a0;             /* 우측 배지 배경 */
+  --dir-badge-text: #ffffff;             /* 우측 배지 텍스트 */
+}
+
+/* 시스템 다크모드일 때 자동 적용 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dir-border-color: #374151;
+    --dir-map-border-color: #4b5563;
+    --dir-bg-panel: #020617;
+    --dir-bg-panel-soft: #111827;
+    --dir-text-main: #e5e7eb;
+    --dir-text-sub: #9ca3af;
+
+    /* ✅ 새로고침 버튼: 흰 배경 + 검은 글씨 */
+    --dir-refresh-bg: #ffffff;
+    --dir-refresh-hover-bg: #f3f4f6;
+
+    /* ✅ 지도 아래 액션 버튼: 흰 배경 + 검은 글씨 */
+    --dir-actions-btn-bg: #ffffff;
+    --dir-actions-btn-hover-bg: #f3f4f6;
+    --dir-actions-btn-text: #111827;
+
+    /* ✅ 회사명/위치주소/전화번호 배지: 흰 배경 + 검은 글씨 */
+    --dir-badge-bg: #ffffff;
+    --dir-badge-text: #111827;
+  }
+}
+
+/* ─────────────────────────────────────────
+   Directions 섹션 (모바일 대응)
+   ───────────────────────────────────────── */
+
 /* 컨테이너 + 페이드업 */
 .container {
   /* 화면 크기에 따라 유동 패딩 */
@@ -20,6 +74,7 @@
   font-weight: 800;
   margin: 0 0 clamp(16px, 4vw, 36px);
   line-height: 1.2;
+  color: var(--dir-text-main);
 }
 
 /* 2열 레이아웃 */
@@ -38,7 +93,7 @@
 }
 
 .mapWrap {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dir-map-border-color);
   border-radius: 16px;
   overflow: hidden;
   position: relative; /* 커스텀 버튼 배치 */
@@ -93,13 +148,16 @@
   font-size: 12px;
   padding: 10px 12px;
   min-height: 40px;             /* ≥44px 권장, 디자인에 맞게 조절 */
-  background: #ffffffea;
-  border: 1px solid #e5e7eb;
+  background: var(--dir-refresh-bg);
+  border: 1px solid var(--dir-border-color);
   border-radius: 10px;
   cursor: pointer;
   backdrop-filter: saturate(120%) blur(2px);
+  color: var(--dir-actions-btn-text);
 }
-.refreshBtn:hover { background: #fff; }
+.refreshBtn:hover {
+  background: var(--dir-refresh-hover-bg);
+}
 
 /* 지도 아래 액션바 */
 .actionsBelow {
@@ -111,31 +169,38 @@
   display: inline-block;
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  border: 1px solid var(--dir-border-color);
+  background: var(--dir-actions-btn-bg);
   font-weight: 700;
   text-decoration: none;
-  color: #0f172a;
+  color: var(--dir-actions-btn-text);
   font-size: clamp(13px, 2.6vw, 14px);
 }
-.actionsBelow a:hover { background: #f9fafb; }
+.actionsBelow a:hover {
+  background: var(--dir-actions-btn-hover-bg);
+}
 
 /* 우측 패널 */
-.info { padding-top: 25px; }
-.block { margin-bottom: 24px; }
+.info {
+  padding-top: 25px;
+}
+.block {
+  margin-bottom: 24px;
+}
 .badge {
   display: inline-block;
-  background: #04a8e9a0;
-  color: white;
+  background: var(--dir-badge-bg);
+  color: var(--dir-badge-text);
   font-weight: 600;
   padding: 10px 16px;
   border-radius: 8px;
   margin-bottom: 10px;
 }
-.addr, .tel {
+.addr,
+.tel {
   font-size: clamp(16px, 4.2vw, 20px);
   font-weight: 800;
-  color: #0f172a;
+  color: var(--dir-text-main);
   margin: 6px 0 0;
 }
 

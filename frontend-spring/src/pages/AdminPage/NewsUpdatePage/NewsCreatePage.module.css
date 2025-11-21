@@ -36,6 +36,7 @@
   padding: 10px 12px;
   outline: none;
   font-size: 14px;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 
 /* 카테고리 박스 폭 축소 (데스크탑 320px / 모바일 100%) */
@@ -73,6 +74,7 @@
   border: 1px solid #e5e7eb;
   background: #fff;
   cursor: pointer;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 .smallBtn:hover { background: #f8fafc; }
 
@@ -128,6 +130,7 @@
   border-radius: 4px;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 .fileBtn input {
   position: absolute;
@@ -144,6 +147,7 @@
   border-radius: 4px;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 
 /* 대표 이미지 미리보기 */
@@ -178,6 +182,7 @@
   font-weight: 800;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 .primary {
   background: #2563eb;   /* 블루 */
@@ -197,4 +202,81 @@
   .label { margin-bottom: 6px; }
   .preview { width: 100%; height: auto; }
   .select { width: 100%; } /* 모바일에선 꽉 차게 */
+}
+
+/* ===== 다크 모드 ===== */
+/* 시스템 다크모드(prefers-color-scheme) 기준으로 색상만 오버라이드 */
+@media (prefers-color-scheme: dark) {
+  .wrap {
+    color: #e5e7eb;
+  }
+
+  .title {
+    color: #f9fafb; /* 흰색 계열 제목 */
+  }
+
+  .label {
+    color: #f9fafb; /* 레이블 흰색 계열 */
+  }
+
+  .form {
+    border-top-color: #1f2937;
+  }
+
+  .row, .rowCol {
+    border-bottom-color: #1f2937;
+  }
+
+  .input, .select, .textarea {
+    background: #020617;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+
+  .input::placeholder,
+  .textarea::placeholder {
+    color: #6b7280;
+  }
+
+  .input:focus, .select:focus, .textarea:focus {
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 3px rgba(148,163,184,.45);
+  }
+
+  .smallBtn,
+  .fileBtn,
+  .clearBtn,
+  .ghost {
+    background: #020617;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+
+  .smallBtn:hover,
+  .ghost:hover {
+    background: #111827;
+  }
+
+  .fileName {
+    color: #9ca3af;
+  }
+
+  .inlineThumb {
+    border-color: #374151;
+  }
+
+  .inlineRemove {
+    border-color: #4b5563;
+    background: rgba(15,23,42,.9);
+    color: #e5e7eb;
+  }
+
+  .preview {
+    border-color: #374151;
+  }
+
+  .primary {
+    background: #2563eb;
+    color: #ffffff;
+  }
 }

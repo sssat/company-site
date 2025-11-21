@@ -1,3 +1,26 @@
+/* HomeOnly/HistorySection.module.css */
+/* ─────────────────────────────────────────
+   Timeline 공용 색상 토큰 (라이트/다크)
+   ───────────────────────────────────────── */
+
+/* 기본: 라이트 모드 */
+:root {
+  --timeline-line-color: #e5e7eb;   /* 세로 라인 색 */
+  --timeline-dot-color: #ef4444;    /* 도트 배경 색 */
+  --timeline-date-color: #1f2937;   /* 날짜 텍스트 색 */
+  --timeline-desc-color: #4b5563;   /* 설명 텍스트 색 */
+}
+
+/* 시스템이 다크모드일 때 자동 적용 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --timeline-line-color: #4b5563;  /* 어두운 배경에서 보이는 중간 톤 라인 */
+    --timeline-dot-color: #fb7185;   /* 다크 모드용 살짝 밝은 레드 */
+    --timeline-date-color: #e5e7eb;  /* 메인 텍스트(날짜) */
+    --timeline-desc-color: #9ca3af;  /* 보조 텍스트(설명) */
+  }
+}
+
 /* ─────────────────────────────────────────
    Timeline 섹션 (모바일 대응)
    ───────────────────────────────────────── */
@@ -54,7 +77,7 @@
   left: var(--line-x);
   top: 0; bottom: 0;
   width: 2px;
-  background: #e5e7eb;
+  background: var(--timeline-line-color);
 }
 
 /* 각 항목 */
@@ -79,7 +102,7 @@
   width: var(--dot-size);
   height: var(--dot-size);
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--timeline-dot-color);
   box-shadow: 0 2px 8px rgba(0,0,0,.2);
   z-index: 1;
 }
@@ -103,13 +126,13 @@
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
   font-size: 16px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--timeline-date-color);
   margin: 0 0 4px;
 }
 .desc {
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
   font-size: 16px;
-  color: #4b5563;
+  color: var(--timeline-desc-color);
   margin: 0;
 }
 
