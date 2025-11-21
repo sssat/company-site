@@ -1074,21 +1074,12 @@ public class AccountsService implements AccountsUseCase {
     // 17. 역할 단어인지(ADMIN/SUPER/USER 한/영) 판별
     private static boolean isRoleWord(String term) {
         if (term == null) return false;
-        String t = term.trim().toLowerCase();
-        if (t.isEmpty()) return false;
-
+        String t = term.toLowerCase();
         return switch (t) {
-            // USER
-            case "user", "일반", "사용자" -> true;
-
-            // ADMIN
-            case "admin", "administrator", "관리자" -> true;
-
-            // SUPER_ADMIN
-            case "superadmin", "super admin", "super-admin", "super_admin",
-                "슈퍼관리자", "슈퍼 어드민" -> true;
-
-            // "super", "슈퍼" 단독은 제거 (일반 키워드로 취급)
+            case "admin", "administrator", "관리자",
+                "super", "superadmin", "super-admin", "super_admin",
+                "슈퍼", "슈퍼관리자",
+                "user", "일반", "사용자" -> true;
             default -> false;
         };
     }
@@ -1100,47 +1091,45 @@ public class AccountsService implements AccountsUseCase {
 
     // 19. 전체 토큰에서 역할 힌트(0/1/2) 추출: 역할 단어/숫자 우선 매칭
     private static Integer extractRoleHint(List<String> terms) {
-        if (terms == null) return null;
+        if (terms == null || terms.isEmpty()) return null;
 
+        // 1) 우선 전체 문장 기준 멀티워드 패턴 처리
+        String full = String.join(" ", terms).toLowerCase();
+        if (full.contains("super admin")      // "super admin"
+                || full.contains("super-admin")   // 혹시 모를 하이픈
+                || full.contains("super_admin")   // 언더스코어
+                || full.contains("슈퍼 관리자")
+                || full.contains("슈퍼관리자")) {
+            return 2; // SUPER_ADMIN
+        }
+
+        // 2) 나머지는 토큰 단위 기존 로직
         Integer hint = null;
-
         for (String raw : terms) {
-            if (raw == null) continue;
-            String t = raw.trim().toLowerCase();
-            if (t.isEmpty()) continue;
+            String t = raw.toLowerCase();
 
-            // 1) 숫자 코드 우선 처리
+            // 숫자 코드 우선 처리 (0/1/2)
             if (isPureRoleCode(t)) {
                 int v = Integer.parseInt(t);
-                if (v >= 0 && v <= 2) {
-                    return v;
-                }
+                if (v >= 0 && v <= 2) return v;
             }
 
-            // 2) 역할 키워드 매핑
+            // 역할 키워드 매칭
             switch (t) {
-                // SUPER_ADMIN
-                case "superadmin", "super admin", "super-admin", "super_admin",
-                    "슈퍼관리자", "슈퍼 어드민":
+                case "super", "superadmin", "super-admin", "super_admin", "슈퍼", "슈퍼관리자":
                     return 2;
-
-                // ADMIN
                 case "admin", "administrator", "관리자":
-                    if (hint == null) hint = 1;
+                    hint = (hint == null) ? 1 : hint;
                     break;
-
-                // USER
                 case "user", "일반", "사용자":
-                    if (hint == null) hint = 0;
+                    hint = (hint == null) ? 0 : hint;
                     break;
-
                 default:
-                    // 그냥 일반 검색어
+                    // ignore
             }
         }
         return hint;
     }
-
 
     // 20. 등급 기본 라벨
     private static String defaultGradeName(int code) {
@@ -1151,5 +1140,3 @@ public class AccountsService implements AccountsUseCase {
         };
     }
 }
-
-
