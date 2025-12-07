@@ -1,6 +1,6 @@
 // config/SecurityConfig.java
-// 스프링 시큐리티 전역 설정 + CORS 설정을 Bean으로 등록
-// 장고의 config/settings.py의 MIDDLEWARE + 보안 설정(Security, CORS, CSRF 등) 부분에 해당하는 일부 설정
+// 스프링 시큐리티 전역 설정 + CORS + JWT 검증 같은 보안 규칙을 전부 총괄해서 설정하는 파일
+
 
 // SecurityConfig 클래스가 위치한 패키지 경로
 // 1. 하나의 .java 파일에는 public 클래스는 최대 1개만 가능
@@ -8,38 +8,40 @@
 package com.marketstage.backend.config;
 
 // 1. 자바 표준 라이브러리
-import java.time.Duration; // 시간 길이를 표현하는 클래스
-import java.util.List;     // 여러 값을 순서대로 저장하는 인터페이스
-import java.nio.charset.StandardCharsets;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
+import java.time.Duration;                // '30분', '1시간' 같은 시간 길이를 표현하는 클래스 
+import java.util.List;                    // 여러 값을 순서대로 저장하는 인터페이스
+import java.nio.charset.StandardCharsets; // UTF-8 같은 표준 문자 인코딩 상수를 제공 
+import javax.crypto.SecretKey;            // 대칭키(HMAC 등)를 표현하는 인터페이스
+import javax.crypto.spec.SecretKeySpec;   // 바이트 배열을 기반으로 SecretKey 객체를 만드는 구현체
 
 // 2. 스프링 기본 라이브러리(빈/설정)
 // Bean(빈): 개발자가 직접 new 하지 않고, 스프링이 대신 생성하고 관리하는 객체(인스턴스)
 // 스프링이 알아서 만들어서 모든 빈을 컨테이너(ApplicationContext) 안에 등록해두고 필요할 때 꺼내서 자동으로 주입(의존성 주입, DI: Dependency Injection)해준다.
 // 따라서 메서드가 @Bean으로 어노테이션 표시 되어있으면 이 메서드의 반환값이 빈으로 등록되어 컨테이너(ApplicationContext)에 들어간다 -> 그 후 필요한 곳에 자동으로 주입되어 사용된다
-import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Bean;           // 메서드의 반환값을 스프링 빈으로 등록할 때 사용하는 어노테이션
 import org.springframework.context.annotation.Configuration;  // 이 클래스가 스프링 설정 클래스임을 표시하는 어노테이션
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Value;    // application.yml 등의 설정값을 필드/파라미터에 주입할 때 사용하는 어노테이션
 
 // 3. 스프링 시큐리티 라이브러리(보안)
 import org.springframework.security.config.Customizer; // 간단한 기본설정을 적용할 때 쓰는 함수형 인터페이스
-import org.springframework.security.config.annotation.web.builders.HttpSecurity; // 시큐리티 규칙을 체이닝으로 구성하는 클래스
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.web.SecurityFilterChain; // 보안 필터 체인을 정의하는 인터페이스
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity; // 시큐리티 규칙을 체이닝으로 구성하는 설정 빌더
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer; // CSRF 등 개별 보안 설정 모듈의 공통 부모(여기서는 csrf().disable() 등에 사용)
+import org.springframework.security.config.http.SessionCreationPolicy; // 세션을 어떻게 관리할지(STATELESS, IF_REQUIRED 등) 정하는 enum
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;      // JWT 서명에 사용할 MAC 알고리즘 지정(여기선 HS256 등)
+import org.springframework.security.web.SecurityFilterChain;          // 보안 필터 체인을 정의하는 인터페이스 (스프링 시큐리티의 최종 룰 집합)
+import org.springframework.security.oauth2.jwt.JwtDecoder;           // JWT를 파싱하고 서명을 검증하는 컴포넌트의 인터페이스
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;     // JwtDecoder의 구현체. Nimbus 라이브러리를 사용해 실제 JWT 검증을 수행
 
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+// 4. CORS 관련 라이브러리
+import org.springframework.web.cors.CorsConfiguration;              // 허용 origin, 메서드, 헤더 등 CORS 정책 한 세트를 표현하는 클래스
+import org.springframework.web.cors.CorsConfigurationSource;        // 요청 정보에 따라 어떤 CORS 설정을 쓸지 제공하는 인터페이스
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // URL 패턴별로 CorsConfiguration을 매핑해서 관리하는 기본 구현체
 
-// @Configuration : 이 클래스를 스프링 설정 파일처럼 인식하게 한다 -> 내부의 @Bean 메서드들을 찾아서 실행하고, 그 리턴값을 빈(Bean) 으로 컨테이너에 등록한다
+// @Configuration : 이 클래스를 스프링 설정 파일처럼 인식하게 한다
+// 내부의 @Bean 메서드들을 찾아서 실행하고, 그 리턴값을 빈(Bean) 으로 컨테이너에 등록한다
 // 원래 XML에 <bean> 태그로 적던 설정을, 자바 코드 안에서 @Configuration + @Bean으로 적음
 @Configuration
+
 // SecurityConfig: 이 보안 시스템의 전역 규칙(정책)을 설정하는 클래스
 public class SecurityConfig {
 
@@ -168,7 +170,7 @@ public class SecurityConfig {
                 // 뉴스 공개는 모두 허용
                 .requestMatchers("/api/news/**").permitAll()
 
-                // 관리자 전용(뉴스/문의/계정) → 일단 authenticated()만, 권한은 서비스에서 체크
+                // 관리자 전용(뉴스/문의/계정) -> 일단 authenticated()만, 권한은 서비스에서 체크
                 .requestMatchers("/api/admins/**").authenticated()
 
                 // 나머지도 기본적으로 로그인 필요

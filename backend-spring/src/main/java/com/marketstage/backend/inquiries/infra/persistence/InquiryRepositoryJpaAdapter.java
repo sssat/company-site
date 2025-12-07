@@ -114,18 +114,19 @@ public class InquiryRepositoryJpaAdapter implements InquiryRepository {
     // (3) 공통 WHERE 조건(필터) 조립 헬퍼
     // ─────────────────────────────────────────────────────────
     private List<Predicate> buildPredicates(
-            CriteriaBuilder cb,
-            Root<Inquiry> root,
-            String q,
-            Boolean processed
+        CriteriaBuilder cb,
+        Root<Inquiry> root,
+        String q,
+        Boolean processed
     ) {
         List<Predicate> list = new ArrayList<>();
 
+        // 1) 처리 상태 필터: pending/done
         if (processed != null) {
             list.add(cb.equal(root.get("processed"), processed));
         }
 
-        // (B) 검색어(q) 처리
+        // 2) 검색어(q): 제목 + 작성자만 검색
         if (q != null && !q.isBlank()) {
             String[] parts = q.trim().split("\\s+");
             for (String raw : parts) {
@@ -136,18 +137,17 @@ public class InquiryRepositoryJpaAdapter implements InquiryRepository {
 
                 String like = "%" + term.toLowerCase() + "%";
 
-                Expression<String> nameExpr    = cb.lower(root.get("name"));
-                Expression<String> emailExpr   = cb.lower(root.get("email"));
-                Expression<String> titleExpr   = cb.lower(root.get("title"));
-                Expression<String> messageExpr = cb.lower(root.get("message"));
+                // 작성자(name), 제목(title)만 검색 대상
+                Expression<String> nameExpr  = cb.lower(root.get("name"));
+                Expression<String> titleExpr = cb.lower(root.get("title"));
 
                 Predicate or = cb.or(
                         cb.like(nameExpr, like),
-                        cb.like(emailExpr, like),
-                        cb.like(titleExpr, like),
-                        cb.like(messageExpr, like)
+                        cb.like(titleExpr, like)
                 );
-                list.add(or); // 여러 토큰이면 나중에 AND 로 모두 결합됨
+
+                // 여러 단어면 AND 로 모두 만족해야 함
+                list.add(or);
             }
         }
 

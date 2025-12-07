@@ -1,23 +1,32 @@
 // accounts/domain/model/User.java
-// User 도메인 모델: 사용자(회원) 정보를 담는 도메인 엔티티(@Entity)
+// 1. User 도메인 모델
+// => 사용자(회원) 정보를 담는 도메인 엔티티(@Entity)
 // 참고로 accounts, news, inquiries는 도메인이고, accounts 안의 User, UserLevel, LoginLog 등이 엔티티이다.
 // 파이썬 장고 models.py의 class User(models.Model) 클래스가 대응됨
-// 파일 안에 클래스 몇개든 자유롭게 선언가능한 파이썬과 다르게 
-// 자바는 메인이 되는 public 클래스가 .java 파일 당 하나만 지정할 수 있기 때문에 User.java에는 User 클래스(테이블) 하나만 정의되어있다.
-// User.java 안에 클래스를 정의하면 스프링이 알아서 DB 테이블로 바꿔준다.
+// 파이썬은 하나의 .py 파일 안에 여러 클래스를 자유롭게 정의하지만,
+// 자바의 public 클래스는 .java 파일당 하나만 허용되고, 파일명과 public 클래스명이 일치해야 한다.
+// 그 외에는 클래스 앞에 public을 붙일 수 없다.
+// 따라서 관례상 User.java 파일에는 public class User 엔티티 하나만 정의한다.
 
-// 포트(Port)
-// => 바깥세계와 "어떻게 통신할지"를 정의한 인터페이스(계약서)
-// 인바운드 포트(Inbound Port): 바깥(웹/UI/컨트롤러) -> 애플리케이션 내부로 들어오는 요청 통로. 컨트롤러가 호출한다. 
-// 아웃바운드 포트(Outbound Port): 애플리케이션 내부(서비스) -> 바깥 자원(DB, JWT, 메일 등)으로 나가는 의존 통로. 서비스가 호출한다.
+// 2. 포트(Port)
+// => 바깥세계(웹/UI/DB/외부 시스템 등)와 "어떻게 통신할지"를 정의한 인터페이스(계약서)
 
-// 퍼시스턴스 아웃바운드 포트
-// => 서비스가 DB/스토리지에 "무엇을" 요청하는지를 선언해 둔 인터페이스(계약)
+// 3. 인바운드 포트(Inbound Port) 
+// 바깥(웹/UI/컨트롤러) -> 애플리케이션 내부로 들어오는 요청 통로
+// 컨트롤러(또는 다른 어댑터)가 호출하는 유즈케이스 인터페이스
 
-// 어댑터(Adapter)
+// 4. 아웃바운드 포트(Outbound Port)
+// 애플리케이션 내부(서비스) -> 바깥 자원(DB, JWT, 메일, S3 등)으로 나가는 의존 통로.
+// 서비스가 호출하고, 실제 구현은 인프라 어댑터(JPA, 외부 API 클라이언트 등)가 담당한다.
+
+// 5. 퍼시스턴스 아웃바운드 포트
+// => 서비스가 DB/스토리지에 "무엇을" 요청할 수 있는지 정의한 인터페이스(계약)
+// 저장/조회/검색 등의 기능 시그니처만 선언하고, 구현 방식(JPA, MyBatis, 직접 JDBC 등)은 모른다.
+
+// 6. 어댑터(Adapter)
 // => 포트(인터페이스)의 구현체. 기술 구체화
 
-// 작성 순서
+// [작성 순서 (레이어드 + 헥사고날 아키텍처)]
 // 1. 도메인 모델: domain/model/User.java, UserLevel.java, LoginLog.java
 // 2. 애플리케이션 포트
 //    (1) 인바운드 포트 (=유즈케이스): application/port/in/AccountsUseCase.java
@@ -30,18 +39,67 @@
 // 3. 공통 예외 처리: common/exception/NotFoundException.java -> 서비스에서 바로 쓸 수 있어야 하므로 초기에 작성하고, 실질적 로직은 없음 (빈 껍데기만 제작)
 // 4. 서비스 (=유즈케이스의 구현): application/service/AccountsService.java
 // 5. 인프라 
+//   (0) 공통 인프라 유틸
+//     1) 공통 JPA 컨버터: common/jpa/LocalDateStringAttributeConverter.java -> JPA가 DB와 값을 변환할 때 쓰는 로우레벨 기술 유틸이라 포트 대상 자체가 아니라서 포트 안 만듦
+//     2) 메일 어댑터: common/mail/MailService.java -> 메일 발송은 현재 common/mail/MailService로 바로 구현했음 (아웃바운드 포트는 따로 두지 않음). 하지만 추후 MailPort 인터페이스를 분리해서 헥사고날 구조로 확장해도 무방하다.
+//     => 둘 다 실제로는 infra 폴더가 아니라 common 폴더에 위치하지만,
+//        로그인/뉴스/문의 등 여러 모듈에서 공통으로 사용하는 인프라 유틸/어댑터이기 때문에
+//        common 패키지에 두었음. 아키텍처 관점에서는 인프라 계층에 속하지만,
+//        물리적인 파일 위치만 infra가 아니라 common 아래로 두었다.
 //   (1) Persistence(퍼시스턴스)
-//     0) 공통 JPA 컨버터: common/jpa/LocalDateStringAttributeConverter.java
 //     1) Spring Data JPA Repository: infra/persistence/SpringDataUserRepository.java, SpringDataUserLevelRepository.java, SpringDataLoginLogRepository.java
 //     2) 아웃바운드 포트 구현체(Adapter): infra/persistence/UserRepositoryJpaAdapter.java, UserLevelRepositoryJpaAdapter.java, LoginLogRepositoryJpaAdapter.java 
 //   (2) JWT 어댑터: infra/security/JwtIssuerImpl.java, infra/security/JwtVerifierImpl.java
 // 6. 설정 클래스/빈 정의: common/AppConfig.java
-// 7. API 계층
+// 7. API 계층 
 //   (1) 요청/응답 DTO: src/main/java/com/marketstage/backend/accounts/api/dto/* 
 //   (2) 컨트롤러: src/main/java/com/marketstage/backend/accounts/api/AccountsController.java
 //   (3) 전역 예외 처리: src/main/java/com/marketstage/backend/common/GlobalExceptionHandler.java -> HTTP 상태/에러 바디 포맷을 컨트롤러/명세에 맞춰 매핑해야 해서 실질적 로직이 존재하고, 맨 나중에 작성
 
-// 코드 작성 후 해야할 것
+// [작성 순서 (순수 레이어드 아키텍처 버전)]
+// 1. 도메인 계층 (Domain Layer)
+//   - 엔티티 및 도메인 모델
+//   - src/main/java/com/marketstage/backend/accounts/domain/model/
+//     1) User.java
+//     2) UserLevel.java
+//     3) LoginLog.java
+
+// 2. 인프라/퍼시스턴스 계층 (Infrastructure / Persistence Layer)
+//   (1) JPA 관련 공통 유틸
+//     - common/jpa/LocalDateStringAttributeConverter.java
+//   (2) Spring Data JPA Repository
+//     - infra/persistence/SpringDataUserRepository.java
+//     - infra/persistence/SpringDataUserLevelRepository.java
+//     - infra/persistence/SpringDataLoginLogRepository.java
+//     => 헥사고날의 "퍼시스턴스 아웃바운드 포트 + 어댑터"를 쓰지 않고,
+//        서비스가 바로 Spring Data Repository 인터페이스를 주입받아 사용.
+//   (3) JWT / 메일 등 인프라 서비스
+//     - infra/security/JwtService.java (예: JwtIssuer + JwtVerifier 역할 통합 가능)
+//     - common/mail/MailService.java
+//     => 이들도 별도의 포트 인터페이스 없이, 서비스에서 직접 의존.
+
+// 3. 공통 예외 / 설정
+//   - common/exception/NotFoundException.java
+//   - common/AppConfig.java
+
+// 4. 서비스 계층 (Service / Application Layer)
+//   - 비즈니스 로직 구현체 (포트 인터페이스 없이 바로 서비스 클래스로 사용)
+//   - src/main/java/com/marketstage/backend/accounts/application/service/
+//     1) AccountsService.java
+//   - 의존성:
+//     - SpringDataUserRepository, SpringDataUserLevelRepository, SpringDataLoginLogRepository
+//     - JwtService, MailService 등 인프라 빈을 바로 주입받아 사용.
+
+// 5. API / 프레젠테이션 계층 (Presentation / Web Layer)
+//   (1) 요청/응답 DTO
+//     - src/main/java/com/marketstage/backend/accounts/api/dto/*
+//   (2) 컨트롤러
+//     - src/main/java/com/marketstage/backend/accounts/api/AccountsController.java
+//   (3) 전역 예외 처리
+//     - src/main/java/com/marketstage/backend/common/GlobalExceptionHandler.java
+//     => HTTP 상태 코드 & 에러 바디 포맷을 컨트롤러/명세에 맞춰 매핑.
+
+// [코드 작성 후 해야할 것]
 // 1. 전체 빌드 & 런타임 검증 (backend-spring 폴더 안에서 실행)
 // (1) 전체 빌드 실행: 
 // (2) 애플리케이션 실행
@@ -55,8 +113,6 @@
 //   4) 브라우저로 헬스체크: http://localhost:8080/actuator/health/로 들어가서 {"status":"UP"} 뜨나 확인
 //   5) Postman으로 api 테스트
 // 3. 프론트엔드 연동 (frontend-spring)
-
-
 
 
 // User 클래스가 위치한 패키지 경로

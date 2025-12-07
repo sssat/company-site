@@ -1,10 +1,22 @@
+# .gitignore: Git한테 이 파일/폴더들은 무시해달라고 알려주는 설정 파일
+# 이 루트 .gitignore 파일 하나로
+# backend-django 
+# frontend-django 
+# backend-spring 
+# frontend-spring 
+# 전부 다 적용됨
+
+# 1. Spring Initializr가 생성한 도움말 문서 -> 버전 관리에 필요 없으니 Git에서 무시
 HELP.md
+
+# 2. Gradle / 빌드 산출물 -> 산출물이라 커밋 불필요
 .gradle
 build/
 !/backend-spring/gradle/wrapper/gradle-wrapper.jar
 !/backend-spring/gradle/wrapper/gradle-wrapper.properties
 
-### STS ###
+# 3. IDE가 자동으로 생성하는 프로젝트 설정/캐시/빌드 폴더들
+# (1) STS / Eclipse 계열
 .apt_generated
 .classpath
 .factorypath
@@ -16,7 +28,7 @@ bin/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
 
-### IntelliJ IDEA ###
+# (2) IntelliJ IDEA 
 .idea
 *.iws
 *.iml
@@ -25,22 +37,64 @@ out/
 !**/src/main/**/out/
 !**/src/test/**/out/
 
-### NetBeans ###
+# (3) NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
 
-### VS Code ###
+# (4) VS Code 
 .vscode/
 
-# backend-spring 전용
+# 4. backend-spring 전용 -> 스프링 백엔드 폴더 안의 빌드 결과물(build, .gradle, out), IDE 설정(.idea, *.iml)을 강제로 무시
+# 위쪽 공통 규칙으로도 대부분 걸리지만, 한 번 더 명시해 둔 상태
 /backend-spring/build/
 /backend-spring/.gradle/
 /backend-spring/out/
 /backend-spring/.idea/
 /backend-spring/*.iml
 
+# 5. 로컬 환경 스크립트 / 민감정보 (메일 비번, AWS 키 등)
 /ops/local/
 /**/set-env-*.ps1
+
+# 6. 로그 파일 -> 용량도 커지고, 내용도 시시각각 바뀌는 일회성 데이터라 Git에서 관리 안 함
+logs/
+*.log
+
+# 7. .env / 환경 변수 파일
+.env
+*.env
+backend-django/.env
+backend-spring/.env
+
+# 8. 프론트엔드 관련 (Node / Vite)
+frontend-django/node_modules/
+frontend-django/dist/
+frontend-spring/node_modules/
+frontend-spring/dist/
+
+# 9. 파이썬 / Django 공통
+**/__pycache__/
+*.py[cod]
+*$.py.class
+.python-version
+
+# pytest / 타입체커 / 린터 캐시
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 10. 가상환경
+venv/
+.venv/
+env/
+.env/
+backend-django/venv/
+backend-django/.venv/
+
+# 11. DB 파일 (SQLite 등)
+*.sqlite3
+*.db
+*.db3

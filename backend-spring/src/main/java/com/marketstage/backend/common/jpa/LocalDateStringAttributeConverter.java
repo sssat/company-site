@@ -7,7 +7,7 @@ import jakarta.persistence.Converter;
 
 import java.time.LocalDate;
 
-@Converter(autoApply = false) // 필요하면 true로 바꿔서 모든 LocalDate에 자동 적용 가능.
+@Converter(autoApply = false) // 필요하면 true로 바꿔서 모든 LocalDate에 자동 적용 가능
 public class LocalDateStringAttributeConverter
         implements AttributeConverter<LocalDate, String> {
 

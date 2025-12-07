@@ -1,35 +1,35 @@
-// build.gradle: Gradle 빌드 설정 파일
-// Spring Boot 프로젝트에서 의존성(라이브러리), Java 버전, 플러그인, 빌드/테스트 방법 등을 정의해 두는 핵심 설정 스크립트
-// 빌드 리로드: ctrl+shift+p => "Java:Clean Java Language Server Workspace" -> Reload and delete 클릭
+// build.gradle
+// "이 스프링 백엔드는 이런 버전의 자바로, 이런 라이브러리들 사용해서, 이렇게 빌드/테스트해줘" 라고 Gradle에게 지시하는 설정 파일
+// 이 파일을 수정했다면, 보통 .\gradlew build (필요하면 .\gradlew clean build)로 다시 빌드해준다.
 
-// 플러그인 섹션
+// 1. 플러그인 섹션
 plugins {
-    id 'java'
-    id 'org.springframework.boot' version '3.4.2'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'java'                                             // "이 프로젝트는 자바 프로젝트야" 라는 선언
+    id 'org.springframework.boot' version '3.4.2'         // 스프링 부트 전용 플러그인
+    id 'io.spring.dependency-management' version '1.1.7'  // 의존성(라이브러리) 버전들을 관리해주는 플러그인
 }
 
-// 프로젝트 메타정보
+// 2. 프로젝트 메타정보
 group = 'com.marketstage'
 version = '0.0.1-SNAPSHOT'
 description = 'Demo project for Spring Boot'
 
-// Java 툴체인
+// 3. Java 툴체인
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(21)   // 이 프로젝트는 Java 21 기준으로 컴파일해줘 라는 의미
     }
 }
 
-// 저장소
+// 4. 저장소
 repositories {
-    mavenCentral()
+    mavenCentral()  // 라이브러리(의존성)를 어디서 내려받을지 지정. mavenCentral() -> 전 세계 표준 저장소
 }
 
-// 의존성
+// 5. 의존성 (가장 중요한 부분)
 dependencies {
     
-    // 애플리케이션
+    // 애플리케이션: 스프링 기본 스타터들
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -40,34 +40,33 @@ dependencies {
     implementation(platform("software.amazon.awssdk:bom:2.38.5"))
     implementation("software.amazon.awssdk:s3")
 
-    // (선택) 스프링이 JWT 검증까지 해주길 원하면 유지
+    // 스프링이 JWT 토큰을 자동으로 파싱/검증해주는 리소스 서버 기능용
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
-    // 메일(SMTP)
+    // 메일 전송 (SMTP)
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // DB / 마이그레이션
-    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-core'  // Flyway 마이그레이션 도구. (장고 migrations 역할과 비슷)
     implementation 'org.hibernate.orm:hibernate-community-dialects'
-    runtimeOnly   'org.xerial:sqlite-jdbc:3.45.1.0'
+    runtimeOnly   'org.xerial:sqlite-jdbc:3.45.1.0'  // SQLite를 자바에서 사용하기 위한 JDBC 드라이버
 
     // JWT (JJWT)
     implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
     runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.12.5'
     runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.12.5'
 
-    // Lombok
+    // Lombok: @Getter, @Setter, @Builder 등 자동 코드 생성해주는 라이브러리
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // Test
+    // 테스트 관련
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly   'org.junit.platform:junit-platform-launcher'
 }
 
-
-// 테스트 태스크 설정
+// 6. 테스트 태스크 설정
 tasks.named('test') {
     useJUnitPlatform()
 }
