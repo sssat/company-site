@@ -56,48 +56,6 @@
 //   (2) 컨트롤러: src/main/java/com/marketstage/backend/accounts/api/AccountsController.java
 //   (3) 전역 예외 처리: src/main/java/com/marketstage/backend/common/GlobalExceptionHandler.java -> HTTP 상태/에러 바디 포맷을 컨트롤러/명세에 맞춰 매핑해야 해서 실질적 로직이 존재하고, 맨 나중에 작성
 
-// [작성 순서 (순수 레이어드 아키텍처 버전)]
-// 1. 도메인 계층 (Domain Layer)
-//   - 엔티티 및 도메인 모델
-//   - src/main/java/com/marketstage/backend/accounts/domain/model/
-//     1) User.java
-//     2) UserLevel.java
-//     3) LoginLog.java
-
-// 2. 인프라/퍼시스턴스 계층 (Infrastructure / Persistence Layer)
-//   (1) JPA 관련 공통 유틸
-//     - common/jpa/LocalDateStringAttributeConverter.java
-//   (2) Spring Data JPA Repository
-//     - infra/persistence/SpringDataUserRepository.java
-//     - infra/persistence/SpringDataUserLevelRepository.java
-//     - infra/persistence/SpringDataLoginLogRepository.java
-//     => 헥사고날의 "퍼시스턴스 아웃바운드 포트 + 어댑터"를 쓰지 않고,
-//        서비스가 바로 Spring Data Repository 인터페이스를 주입받아 사용.
-//   (3) JWT / 메일 등 인프라 서비스
-//     - infra/security/JwtService.java (예: JwtIssuer + JwtVerifier 역할 통합 가능)
-//     - common/mail/MailService.java
-//     => 이들도 별도의 포트 인터페이스 없이, 서비스에서 직접 의존.
-
-// 3. 공통 예외 / 설정
-//   - common/exception/NotFoundException.java
-//   - common/AppConfig.java
-
-// 4. 서비스 계층 (Service / Application Layer)
-//   - 비즈니스 로직 구현체 (포트 인터페이스 없이 바로 서비스 클래스로 사용)
-//   - src/main/java/com/marketstage/backend/accounts/application/service/
-//     1) AccountsService.java
-//   - 의존성:
-//     - SpringDataUserRepository, SpringDataUserLevelRepository, SpringDataLoginLogRepository
-//     - JwtService, MailService 등 인프라 빈을 바로 주입받아 사용.
-
-// 5. API / 프레젠테이션 계층 (Presentation / Web Layer)
-//   (1) 요청/응답 DTO
-//     - src/main/java/com/marketstage/backend/accounts/api/dto/*
-//   (2) 컨트롤러
-//     - src/main/java/com/marketstage/backend/accounts/api/AccountsController.java
-//   (3) 전역 예외 처리
-//     - src/main/java/com/marketstage/backend/common/GlobalExceptionHandler.java
-//     => HTTP 상태 코드 & 에러 바디 포맷을 컨트롤러/명세에 맞춰 매핑.
 
 // [코드 작성 후 해야할 것]
 // 1. 전체 빌드 & 런타임 검증 (backend-spring 폴더 안에서 실행)

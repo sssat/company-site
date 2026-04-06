@@ -1,3 +1,5 @@
+// src/components/Auth/SignUp/SiguUpSuccessCard/SignUpSuccessCard.tsx
+
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import styles from "./SignUpSuccessCard.module.css";

@@ -1,3 +1,5 @@
+// src/pages/AuthPage/SignUpPage/SignUpSuccessPage.tsx
+
 import { useEffect } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import SignUpSuccessCard from "../../../components/Auth/SignUp/SignUpSuccessCard/SignUpSuccessCard";
